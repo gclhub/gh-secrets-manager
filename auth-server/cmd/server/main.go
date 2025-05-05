@@ -9,7 +9,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/CharlesSchwab/secrets-manager/auth-server/pkg/auth"
+	"github.com/gclhub/gh-secrets-manager/auth-server/pkg/auth"
 )
 
 func main() {

@@ -5,7 +5,7 @@ A GitHub CLI extension for managing GitHub Actions secrets and variables, and De
 ## Installation
 
 ```bash
-gh extension install owner/gh-secrets-manager
+gh extension install gclhub/gh-secrets-manager
 ```
 
 ## Features
