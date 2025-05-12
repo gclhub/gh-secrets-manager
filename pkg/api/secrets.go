@@ -17,18 +17,32 @@ type SecretEncryption struct {
 
 // GetOrgPublicKey fetches the public key for encrypting organization secrets
 func (c *Client) GetOrgPublicKey(org string) (*SecretEncryption, error) {
-	key, _, err := c.github.Actions.GetOrgPublicKey(c.ctx, org)
+	if err := c.ensureValidToken(); err != nil {
+		return nil, err
+	}
+
+	url := fmt.Sprintf("orgs/%s/actions/secrets/public-key", org)
+	req, err := c.github.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	var key struct {
+		KeyID string `json:"key_id"`
+		Key   string `json:"key"`
+	}
+	_, err = c.github.Do(c.ctx, req, &key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get organization public key: %w", err)
 	}
 
-	publicKey, err := base64.StdEncoding.DecodeString(key.GetKey())
+	publicKey, err := base64.StdEncoding.DecodeString(key.Key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode public key: %w", err)
 	}
 
 	return &SecretEncryption{
-		KeyID:     key.GetKeyID(),
+		KeyID:     key.KeyID,
 		PublicKey: publicKey,
 	}, nil
 }

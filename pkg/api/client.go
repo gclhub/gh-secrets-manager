@@ -167,11 +167,20 @@ func (c *Client) ListOrgSecrets(org string) ([]*github.Secret, error) {
 		return nil, err
 	}
 
-	secrets, _, err := c.github.Actions.ListOrgSecrets(c.ctx, org, &github.ListOptions{})
+	url := fmt.Sprintf("orgs/%s/actions/secrets", org)
+	req, err := c.github.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	var response struct {
+		Secrets []*github.Secret `json:"secrets"`
+	}
+	_, err = c.github.Do(c.ctx, req, &response)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list organization secrets: %w", err)
 	}
-	return secrets.Secrets, nil
+	return response.Secrets, nil
 }
 
 func (c *Client) ListRepoSecrets(owner, repo string) ([]*github.Secret, error) {
