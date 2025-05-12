@@ -610,3 +610,62 @@ func (c *Client) DeleteEnvSecret(owner, repo, environment, name string) error {
 	}
 	return nil
 }
+
+// Environment variables methods
+func (c *Client) ListEnvironmentVariables(owner, repo, environment string) ([]*Variable, error) {
+	if err := c.ensureValidToken(); err != nil {
+		return nil, err
+	}
+
+	url := fmt.Sprintf("repos/%s/%s/environments/%s/variables", owner, repo, environment)
+	req, err := c.github.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	var response struct {
+		Variables []*Variable `json:"variables"`
+	}
+	_, err = c.github.Do(c.ctx, req, &response)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list environment variables: %w", err)
+	}
+
+	return response.Variables, nil
+}
+
+func (c *Client) CreateOrUpdateEnvironmentVariable(owner, repo, environment string, variable *Variable) error {
+	if err := c.ensureValidToken(); err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("repos/%s/%s/environments/%s/variables/%s", owner, repo, environment, variable.Name)
+	req, err := c.github.NewRequest("PUT", url, variable)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	_, err = c.github.Do(c.ctx, req, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create/update environment variable: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) DeleteEnvironmentVariable(owner, repo, environment, name string) error {
+	if err := c.ensureValidToken(); err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("repos/%s/%s/environments/%s/variables/%s", owner, repo, environment, name)
+	req, err := c.github.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	_, err = c.github.Do(c.ctx, req, nil)
+	if err != nil {
+		return fmt.Errorf("failed to delete environment variable: %w", err)
+	}
+	return nil
+}
