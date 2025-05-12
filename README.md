@@ -18,6 +18,7 @@ gh extension install gclhub/gh-secrets-manager
 - Update secret and variable values
 - Delete secrets and variables
 - Support for both GitHub Actions and Dependabot secrets
+- Configure GitHub App authentication settings
 
 ## GitHub App Authentication
 
@@ -110,6 +111,24 @@ The auth server will:
 5. Tokens are automatically refreshed before expiration
 
 ## Usage
+
+### Managing Configuration
+
+Configure GitHub App authentication settings that will be stored for future use:
+
+```bash
+# View current configuration
+gh secrets-manager config view
+
+# Set auth server URL
+gh secrets-manager config set auth-server https://auth.example.com
+
+# Set GitHub App credentials
+gh secrets-manager config set app-id 123456
+gh secrets-manager config set installation-id 987654
+```
+
+When all GitHub App settings are configured, the extension will automatically use GitHub App authentication without requiring additional flags.
 
 ### Managing Secrets
 
