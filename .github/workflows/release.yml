@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ${{ github.workspace }}/gh-secrets-manager
+        working-directory: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v3
         with:
