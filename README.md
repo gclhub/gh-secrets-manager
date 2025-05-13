@@ -114,21 +114,51 @@ The auth server will:
 
 ### Managing Configuration
 
-Configure GitHub App authentication settings that will be stored for future use:
+The `config` subcommand allows you to manage persistent GitHub App authentication settings. Configuration is stored in the user's config directory under `gh/secrets-manager/config.json`.
+
+### Available Commands
+
+- `config view` - Display current configuration settings
+- `config set <key> <value>` - Set a configuration value
+- `config get <key>` - Get a specific configuration value
+- `config delete <key>` - Delete a configuration value
+
+### Configuration Keys
+
+The following configuration keys are supported:
+
+- `auth-server` - URL of the authentication server (e.g., https://auth.example.com)
+- `app-id` - GitHub App ID (numeric)
+- `installation-id` - GitHub App Installation ID (numeric)
+
+### Examples
 
 ```bash
-# View current configuration
+# View all current configuration
 gh secrets-manager config view
 
-# Set auth server URL
-gh secrets-manager config set auth-server https://auth.example.com
+# Get a specific configuration value
+gh secrets-manager config get auth-server
 
-# Set GitHub App credentials
+# Set configuration values
+gh secrets-manager config set auth-server https://auth.example.com
 gh secrets-manager config set app-id 123456
 gh secrets-manager config set installation-id 987654
+
+# Delete a configuration value
+gh secrets-manager config delete auth-server
 ```
 
-When all GitHub App settings are configured, the extension will automatically use GitHub App authentication without requiring additional flags.
+### Configuration Storage
+
+Configuration is automatically stored in:
+- macOS: `~/Library/Application Support/gh/secrets-manager/config.json`
+- Linux: `~/.config/gh/secrets-manager/config.json`
+- Windows: `%APPDATA%\gh\secrets-manager\config.json`
+
+The configuration file uses JSON format and is created automatically when you first set a value. File permissions are set to 0644 to ensure secure access.
+
+When all required GitHub App settings (auth-server, app-id, and installation-id) are configured, the extension will automatically use GitHub App authentication for all commands without requiring additional command-line flags.
 
 ### Managing Secrets
 

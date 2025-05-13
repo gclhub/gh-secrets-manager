@@ -35,8 +35,8 @@ go.work
 ehthumbs.db
 Thumbs.db
 
-# Project specific
+# Project specific binaries/output
 dist/
-gh-secrets-manager
+/gh-secrets-manager
 auth-server/bin/
 auth-server/dist/
