@@ -115,6 +115,12 @@ func (gh *GitHubAuth) GetInstallationToken(installationID int64) (*TokenResponse
 		return nil, fmt.Errorf("decoding response: %w", err)
 	}
 
+	// Validate required fields
+	if tokenResp.Token == "" || tokenResp.ExpiresAt.IsZero() {
+		log.Printf("Invalid token response: missing required fields")
+		return nil, fmt.Errorf("invalid token response: missing required fields")
+	}
+
 	log.Printf("Successfully obtained installation token from GitHub API, expires=%s", tokenResp.ExpiresAt)
 	return &TokenResponse{
 		Token:     tokenResp.Token,
