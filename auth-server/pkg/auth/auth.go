@@ -74,7 +74,7 @@ func (gh *GitHubAuth) GetInstallationToken(installationID int64) (*TokenResponse
 		return nil, fmt.Errorf("generating JWT: %w", err)
 	}
 
-	url := fmt.Sprintf("https://api.github.com/app/installations/%d/access_tokens", installationID)
+	url := fmt.Sprintf("%s/app/installations/%d/access_tokens", GetGitHubAPIBaseURL(), installationID)
 	log.Printf("Requesting installation token from GitHub API: %s", url)
 
 	req, err := http.NewRequest(http.MethodPost, url, nil)
