@@ -53,6 +53,7 @@ jobs:
 
   build-cli:
     name: Build CLI Extension
+    needs: test-cli
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -79,6 +80,7 @@ jobs:
 
   build-auth-server:
     name: Build Auth Server
+    needs: test-auth-server
     runs-on: ubuntu-latest
     defaults:
       run:
