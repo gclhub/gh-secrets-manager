@@ -23,8 +23,12 @@ gh extension install gclhub/gh-secrets-manager
 ## GitHub App Authentication
 
 This tool supports two authentication methods:
-1. Personal Access Token (PAT) through GitHub CLI (default)
-2. GitHub App-based authentication for enhanced security and temporary access
+1. GitHub App-based authentication for enhanced security and temporary access (preferred when configured)
+2. Personal Access Token (PAT) through GitHub CLI (fallback)
+
+When you have configured all required GitHub App settings (auth-server, app-id, and installation-id), the tool will automatically use GitHub App authentication. It only falls back to PAT authentication if:
+- GitHub App configuration is missing or incomplete
+- There's an error loading the configuration
 
 ### Setting up the GitHub App
 
@@ -36,7 +40,6 @@ This tool supports two authentication methods:
        - Secrets: Read & Write
        - Variables: Read & Write
      - Organization permissions:
-       - Actions: Read & Write
        - Secrets: Read & Write
        - Variables: Read & Write
    - Generate and download a private key
@@ -45,6 +48,26 @@ This tool supports two authentication methods:
 2. Install the app in your organization:
    - After creating the app, install it in your organization
    - Note the Installation ID from the installation URL or via the API
+
+### Initial Configuration
+
+After setting up your GitHub App and auth server, configure the CLI extension to use them:
+
+```bash
+# Set the authentication server URL
+gh secrets-manager config set auth-server https://your-auth-server.example.com
+
+# Set your GitHub App ID
+gh secrets-manager config set app-id YOUR_APP_ID
+
+# Set your Installation ID
+gh secrets-manager config set installation-id YOUR_INSTALLATION_ID
+
+# Verify your configuration
+gh secrets-manager config view
+```
+
+Once configured, the extension will automatically use GitHub App authentication for all commands without requiring additional flags.
 
 ### Running the Auth Server
 
@@ -81,6 +104,41 @@ We recommend:
 - Using environment variables or a config management system for the private key
 - Implementing additional access controls and rate limiting
 - Monitoring server health and token usage
+
+### Auth Server Endpoints
+
+The auth server exposes two HTTP endpoints:
+
+#### Health Check
+```
+GET /healthz
+```
+Returns 200 OK if the server is running. Useful for load balancer health checks and monitoring.
+
+#### Token Generation
+```
+POST /token?app-id=APP_ID&installation-id=INSTALLATION_ID
+```
+Generates a GitHub installation access token.
+
+Parameters:
+- `app-id` (required) - The GitHub App ID
+- `installation-id` (required) - The installation ID for the organization
+
+Response (200 OK):
+```json
+{
+    "token": "ghs_xxxxxxxxxxxx",
+    "expires_at": "2025-05-16T19:47:43Z"
+}
+```
+
+Error Response (400, 401, 500):
+```json
+{
+    "message": "error description"
+}
+```
 
 ### Using GitHub App Authentication
 

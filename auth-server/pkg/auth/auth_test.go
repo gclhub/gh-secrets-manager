@@ -43,8 +43,8 @@ func TestNewGitHubAuth(t *testing.T) {
 		{
 			name:       "Valid key and app ID",
 			privateKey: generateTestKey(t),
-			appID:     123456,
-			wantErr:   false,
+			appID:      123456,
+			wantErr:    false,
 		},
 		{
 			name:        "Empty private key",
@@ -179,8 +179,8 @@ func TestGetInstallationToken(t *testing.T) {
 		installationID int64
 		mockStatus     int
 		mockResponse   interface{}
-		wantErr       bool
-		errorContains string
+		wantErr        bool
+		errorContains  string
 	}{
 		{
 			name:           "Successful token generation",
@@ -197,40 +197,40 @@ func TestGetInstallationToken(t *testing.T) {
 			installationID: 0,
 			mockStatus:     http.StatusNotFound,
 			mockResponse:   map[string]string{"message": "Not Found"},
-			wantErr:       true,
-			errorContains: "404",
+			wantErr:        true,
+			errorContains:  "404",
 		},
 		{
 			name:           "Rate limited",
 			installationID: 987654,
 			mockStatus:     http.StatusTooManyRequests,
 			mockResponse:   map[string]string{"message": "API rate limit exceeded"},
-			wantErr:       true,
-			errorContains: "429",
+			wantErr:        true,
+			errorContains:  "429",
 		},
 		{
 			name:           "Server error",
 			installationID: 987654,
 			mockStatus:     http.StatusInternalServerError,
 			mockResponse:   map[string]string{"message": "Internal server error"},
-			wantErr:       true,
-			errorContains: "500",
+			wantErr:        true,
+			errorContains:  "500",
 		},
 		{
 			name:           "Invalid response format",
 			installationID: 987654,
 			mockStatus:     http.StatusCreated,
 			mockResponse:   "not a json response",
-			wantErr:       true,
-			errorContains: "decoding response",
+			wantErr:        true,
+			errorContains:  "decoding response",
 		},
 		{
 			name:           "Missing token in response",
 			installationID: 987654,
 			mockStatus:     http.StatusCreated,
 			mockResponse:   map[string]string{},
-			wantErr:       true,
-			errorContains: "invalid token response",
+			wantErr:        true,
+			errorContains:  "invalid token response",
 		},
 	}
 
