@@ -7,30 +7,8 @@ on:
     branches: [ main ]
 
 jobs:
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ github.workspace }}
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          path: gh-secrets-manager
-
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.24.2'
-
-      - name: Install dependencies
-        run: go mod download
-
-      - name: Run tests
-        run: go test -v ./...
-
-  build:
-    name: Build
+  test-cli:
+    name: Test CLI Extension
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -45,12 +23,80 @@ jobs:
         with:
           go-version: '1.24.2'
 
-      - name: Install dependencies
+      - name: Install CLI dependencies
         run: go mod download
 
-      - name: Build
+      - name: Run CLI tests
+        run: go test -v ./pkg/...
+
+  test-auth-server:
+    name: Test Auth Server
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}/gh-secrets-manager/auth-server
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          path: gh-secrets-manager
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24.2'
+
+      - name: Install auth server dependencies
+        run: go mod download
+
+      - name: Run auth server tests
+        run: go test -v ./pkg/...
+
+  build-cli:
+    name: Build CLI Extension
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}/gh-secrets-manager
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          path: gh-secrets-manager
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24.2'
+
+      - name: Install CLI dependencies
+        run: go mod download
+
+      - name: Build CLI
         env:
           COMMIT_HASH: ${{ github.sha }}
         run: |
           mkdir -p bin
           go build -ldflags="-X gh-secrets-manager/pkg/version.CommitHash=$COMMIT_HASH" -o bin/gh-secrets-manager ./cmd/gh-secrets-manager
+
+  build-auth-server:
+    name: Build Auth Server
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}/gh-secrets-manager/auth-server
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          path: gh-secrets-manager
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24.2'
+
+      - name: Install auth server dependencies
+        run: go mod download
+
+      - name: Build auth server
+        run: |
+          mkdir -p bin
+          go build -o bin/auth-server ./cmd/server
