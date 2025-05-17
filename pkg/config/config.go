@@ -8,9 +8,9 @@ import (
 )
 
 type Config struct {
-	AuthServer     string `json:"auth_server"`
-	AppID          int64  `json:"app_id"`
-	InstallationID int64  `json:"installation_id"`
+	AuthServer     string `json:"auth-server"`
+	AppID          int64  `json:"app-id"`
+	InstallationID int64  `json:"installation-id"`
 }
 
 // IsGitHubAppConfigured returns true if all required GitHub App settings are configured

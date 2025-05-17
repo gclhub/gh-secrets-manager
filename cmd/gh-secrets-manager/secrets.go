@@ -38,7 +38,7 @@ Usage:
   $ gh secrets-manager secrets list --repo owner/repo
 
   # List secrets for repositories with specific property
-  $ gh secrets-manager secrets list --org myorg --property team --prop-value backend
+  $ gh secrets-manager secrets list --org myorg --property team --prop_value backend
 
   # List environment secrets
   $ gh secrets-manager secrets list --repo owner/repo --environment prod`,
@@ -49,7 +49,7 @@ Usage:
   $ gh secrets-manager secrets list --repo owner/repo
 
   # List secrets for all frontend team repositories
-  $ gh secrets-manager secrets list --org myorg --property team --prop-value frontend
+  $ gh secrets-manager secrets list --org myorg --property team --prop_value frontend
 
   # List secrets in an environment
   $ gh secrets-manager secrets list --repo owner/repo --environment prod`,
@@ -88,7 +88,7 @@ Usage:
   $ gh secrets-manager secrets set --org myorg --file secrets.json
 
   # Set secret for specific repositories
-  $ gh secrets-manager secrets set --org myorg --property team --prop-value backend --name DB_PASSWORD --value "secretpass"
+  $ gh secrets-manager secrets set --org myorg --property team --prop_value backend --name DB_PASSWORD --value "secretpass"
 
   # Set secret in an environment
   $ gh secrets-manager secrets set --repo owner/repo --environment prod --name API_KEY --value "1234567890"`,
@@ -102,7 +102,7 @@ Usage:
   $ gh secrets-manager secrets set --org myorg --file secrets.json
 
   # Set secret for all backend repositories
-  $ gh secrets-manager secrets set --org myorg --property team --prop-value backend --name DB_PASSWORD --value "secretpass"
+  $ gh secrets-manager secrets set --org myorg --property team --prop_value backend --name DB_PASSWORD --value "secretpass"
 
   # Set secret in an environment
   $ gh secrets-manager secrets set --repo owner/repo --environment prod --name API_KEY --value "1234567890"`,
@@ -125,7 +125,7 @@ Usage:
   $ gh secrets-manager secrets delete --repo owner/repo --name SECRET_NAME
 
   # Delete a secret from repositories with specific property
-  $ gh secrets-manager secrets delete --org myorg --property team --prop-value backend --name DB_PASSWORD
+  $ gh secrets-manager secrets delete --org myorg --property team --prop_value backend --name DB_PASSWORD
 
   # Delete a secret from an environment
   $ gh secrets-manager secrets delete --repo owner/repo --environment prod --name SECRET_NAME`,
@@ -136,7 +136,7 @@ Usage:
   $ gh secrets-manager secrets delete --repo owner/repo --name DEPLOY_TOKEN
 
   # Delete a secret from all frontend repositories
-  $ gh secrets-manager secrets delete --org myorg --property team --prop-value frontend --name API_KEY
+  $ gh secrets-manager secrets delete --org myorg --property team --prop_value frontend --name API_KEY
 
   # Delete a secret from an environment
   $ gh secrets-manager secrets delete --repo owner/repo --environment prod --name SECRET_NAME`,
@@ -172,7 +172,7 @@ func addCommonFlags(cmd *cobra.Command) {
 	cmd.Flags().StringP("org", "o", "", "GitHub organization name")
 	cmd.Flags().StringP("repo", "r", "", "GitHub repository name")
 	cmd.Flags().String("property", "", "Custom property name for filtering repositories")
-	cmd.Flags().String("prop-value", "", "Custom property value for filtering repositories")
+	cmd.Flags().String("prop_value", "", "Custom property value for filtering repositories")
 }
 
 func runListSecrets(cmd *cobra.Command, opts *api.ClientOptions) error {
@@ -184,7 +184,7 @@ func runListSecrets(cmd *cobra.Command, opts *api.ClientOptions) error {
 	org, _ := cmd.Flags().GetString("org")
 	repo, _ := cmd.Flags().GetString("repo")
 	property, _ := cmd.Flags().GetString("property")
-	value, _ := cmd.Flags().GetString("prop-value")
+	value, _ := cmd.Flags().GetString("prop_value")
 	environment, _ := cmd.Flags().GetString("environment")
 
 	if org != "" {
@@ -258,7 +258,7 @@ func runSetSecrets(cmd *cobra.Command, opts *api.ClientOptions) error {
 	org, _ := cmd.Flags().GetString("org")
 	repo, _ := cmd.Flags().GetString("repo")
 	property, _ := cmd.Flags().GetString("property")
-	propValue, _ := cmd.Flags().GetString("prop-value")
+	propValue, _ := cmd.Flags().GetString("prop_value")
 	environment, _ := cmd.Flags().GetString("environment")
 
 	secret := &github.EncryptedSecret{
@@ -313,7 +313,7 @@ func runDeleteSecrets(cmd *cobra.Command, opts *api.ClientOptions) error {
 	org, _ := cmd.Flags().GetString("org")
 	repo, _ := cmd.Flags().GetString("repo")
 	property, _ := cmd.Flags().GetString("property")
-	value, _ := cmd.Flags().GetString("prop-value")
+	value, _ := cmd.Flags().GetString("prop_value")
 	environment, _ := cmd.Flags().GetString("environment")
 
 	if org != "" {
@@ -370,7 +370,7 @@ func handleFileInput(cmd *cobra.Command, client *api.Client, filePath string) er
 	org, _ := cmd.Flags().GetString("org")
 	repo, _ := cmd.Flags().GetString("repo")
 	property, _ := cmd.Flags().GetString("property")
-	value, _ := cmd.Flags().GetString("prop-value")
+	value, _ := cmd.Flags().GetString("prop_value")
 	environment, _ := cmd.Flags().GetString("environment")
 
 	var lastErr error

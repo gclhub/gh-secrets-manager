@@ -5,8 +5,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"strings"
 	"time"
+
+	"gh-secrets-manager/pkg/config"
 
 	"github.com/cli/go-gh"
 	"github.com/google/go-github/v45/github"
@@ -41,45 +46,63 @@ type Client struct {
 }
 
 func NewClient() (*Client, error) {
-	return NewClientWithOptions(nil)
+	// Try to load GitHub App config first
+	log.Printf("Loading configuration...")
+	cfg, err := config.Load()
+	if err != nil {
+		log.Printf("Failed to load config: %v, falling back to PAT auth", err)
+		return NewClientWithOptions(&ClientOptions{AuthMethod: AuthMethodPAT})
+	}
+
+	// If GitHub App is configured, use it as default
+	if cfg.IsGitHubAppConfigured() {
+		log.Printf("Using GitHub App authentication (app-id=%d, installation-id=%d)", cfg.AppID, cfg.InstallationID)
+		return NewClientWithOptions(&ClientOptions{
+			AuthMethod:     AuthMethodGitHubApp,
+			AppID:          cfg.AppID,
+			InstallationID: cfg.InstallationID,
+			AuthServer:     cfg.AuthServer,
+		})
+	}
+
+	// Only fall back to PAT if GitHub App is not configured
+	log.Printf("GitHub App configuration not found, falling back to PAT authentication")
+	return NewClientWithOptions(&ClientOptions{AuthMethod: AuthMethodPAT})
 }
 
 func NewClientWithOptions(opts *ClientOptions) (*Client, error) {
 	if opts == nil {
-		// Default to PAT authentication using gh CLI
-		_, err := gh.RESTClient(nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create GitHub client: %w", err)
-		}
-		return &Client{
-			github: github.NewClient(http.DefaultClient),
-			ctx:    context.Background(),
-			opts:   &ClientOptions{AuthMethod: AuthMethodPAT},
-		}, nil
+		log.Printf("No options provided, using default PAT auth")
+		return newPATClient()
 	}
 
 	switch opts.AuthMethod {
 	case AuthMethodPAT:
-		_, err := gh.RESTClient(nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create GitHub client: %w", err)
-		}
-		return &Client{
-			github: github.NewClient(http.DefaultClient),
-			ctx:    context.Background(),
-			opts:   opts,
-		}, nil
+		log.Printf("Using PAT authentication")
+		return newPATClient()
 
 	case AuthMethodGitHubApp:
+		log.Printf("Initializing GitHub App client (auth-server=%s, app-id=%d, installation-id=%d)",
+			opts.AuthServer, opts.AppID, opts.InstallationID)
 		client := &Client{
-			ctx:  context.Background(),
-			opts: opts,
+			ctx:    context.Background(),
+			github: github.NewClient(&http.Client{}),
+			opts:   opts,
 		}
 
 		// Get initial token
 		if err := client.refreshToken(); err != nil {
+			log.Printf("Failed to get initial GitHub App token: %v", err)
 			return nil, fmt.Errorf("failed to get initial token: %w", err)
 		}
+		log.Printf("Successfully obtained GitHub App token, expires at %s", client.expiresAt)
+
+		// Update GitHub client with the token
+		client.github = github.NewClient(&http.Client{
+			Transport: &authorizedTransport{
+				token: client.authToken,
+			},
+		})
 
 		return client, nil
 
@@ -88,36 +111,85 @@ func NewClientWithOptions(opts *ClientOptions) (*Client, error) {
 	}
 }
 
+type restTransport struct {
+	client any // gh.RESTClient interface
+}
+
+func (t *restTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	// gh.RESTClient implements a Do method that handles auth
+	if client, ok := t.client.(interface {
+		Do(*http.Request) (*http.Response, error)
+	}); ok {
+		return client.Do(req)
+	}
+	return nil, fmt.Errorf("invalid REST client type")
+}
+
+func newPATClient() (*Client, error) {
+	// Use gh CLI's built-in REST client which handles auth
+	restClient, err := gh.RESTClient(nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GitHub client: %w", err)
+	}
+
+	// Create a transport that uses the REST client directly
+	httpClient := &http.Client{
+		Transport: &restTransport{
+			client: restClient,
+		},
+	}
+
+	return &Client{
+		github: github.NewClient(httpClient),
+		ctx:    context.Background(),
+		opts:   &ClientOptions{AuthMethod: AuthMethodPAT},
+	}, nil
+}
+
 func (c *Client) refreshToken() error {
 	if c.opts.AuthServer == "" {
+		log.Printf("No auth server URL provided")
 		return fmt.Errorf("auth server URL is required")
 	}
 
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/token", c.opts.AuthServer), nil)
+	// Clean up auth server URL by trimming trailing slash
+	authServer := strings.TrimRight(c.opts.AuthServer, "/")
+	tokenURL := fmt.Sprintf("%s/token", authServer)
+	log.Printf("Requesting token from auth server: %s", tokenURL)
+
+	req, err := http.NewRequest("POST", tokenURL, nil)
 	if err != nil {
+		log.Printf("Failed to create auth request: %v", err)
 		return fmt.Errorf("failed to create auth request: %w", err)
 	}
 
 	q := req.URL.Query()
-	q.Add("app_id", fmt.Sprintf("%d", c.opts.AppID))
-	q.Add("installation_id", fmt.Sprintf("%d", c.opts.InstallationID))
+	q.Add("app-id", fmt.Sprintf("%d", c.opts.AppID))
+	q.Add("installation-id", fmt.Sprintf("%d", c.opts.InstallationID))
 	req.URL.RawQuery = q.Encode()
 
+	log.Printf("Making request to auth server with URL: %s", req.URL.String())
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
+		log.Printf("Failed to get token from auth server: %v", err)
 		return fmt.Errorf("failed to get token from auth server: %w", err)
 	}
 	defer resp.Body.Close()
 
+	log.Printf("Auth server response status: %d", resp.StatusCode)
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("auth server returned status %d", resp.StatusCode)
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		log.Printf("Auth server error response: %s", string(bodyBytes))
+		return fmt.Errorf("auth server returned status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	var authResp authResponse
 	if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
+		log.Printf("Failed to decode auth response: %v", err)
 		return fmt.Errorf("failed to decode auth response: %w", err)
 	}
 
+	log.Printf("Successfully obtained new token, expires at: %s", authResp.ExpiresAt)
 	c.authToken = authResp.Token
 	c.expiresAt = authResp.ExpiresAt
 
@@ -137,6 +209,11 @@ type authorizedTransport struct {
 
 func (t *authorizedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	req.Header.Set("Authorization", "Bearer "+t.token)
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	// Add User-Agent as required by GitHub API
+	if req.Header.Get("User-Agent") == "" {
+		req.Header.Set("User-Agent", "gh-secrets-manager")
+	}
 	return http.DefaultTransport.RoundTrip(req)
 }
 
@@ -147,9 +224,12 @@ func (c *Client) ensureValidToken() error {
 
 	// Refresh token if it's expired or will expire in the next minute
 	if time.Now().Add(time.Minute).After(c.expiresAt) {
+		log.Printf("Token expired or will expire soon (expires at: %s), refreshing", c.expiresAt)
 		if err := c.refreshToken(); err != nil {
+			log.Printf("Failed to refresh token: %v", err)
 			return fmt.Errorf("failed to refresh token: %w", err)
 		}
+		log.Printf("Successfully refreshed token, new expiry: %s", c.expiresAt)
 	}
 
 	return nil

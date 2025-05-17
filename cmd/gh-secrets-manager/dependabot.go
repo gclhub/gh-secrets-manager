@@ -36,7 +36,7 @@ Usage:
   $ gh secrets-manager dependabot list --repo owner/repo
 
   # List Dependabot secrets for repositories with specific property
-  $ gh secrets-manager dependabot list --org myorg --property team --prop-value backend`,
+  $ gh secrets-manager dependabot list --org myorg --property team --prop_value backend`,
 		Example: `  # List all Dependabot secrets in an organization
   $ gh secrets-manager dependabot list --org myorg
 
@@ -44,7 +44,7 @@ Usage:
   $ gh secrets-manager dependabot list --repo owner/repo
 
   # List Dependabot secrets for all frontend team repositories
-  $ gh secrets-manager dependabot list --org myorg --property team --prop-value frontend`,
+  $ gh secrets-manager dependabot list --org myorg --property team --prop_value frontend`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runListDependabotSecrets(cmd, opts)
 		},
@@ -82,7 +82,7 @@ Usage:
   $ gh secrets-manager dependabot set --org myorg --file dependabot-secrets.json
 
   # Set Dependabot secret for specific repositories
-  $ gh secrets-manager dependabot set --org myorg --property team --prop-value backend --name DOCKER_TOKEN --value "abcdef123456"`,
+  $ gh secrets-manager dependabot set --org myorg --property team --prop_value backend --name DOCKER_TOKEN --value "abcdef123456"`,
 		Example: `  # Set a Dependabot secret in an organization
   $ gh secrets-manager dependabot set --org myorg --name NPM_TOKEN --value "1234567890"
 
@@ -93,7 +93,7 @@ Usage:
   $ gh secrets-manager dependabot set --org myorg --file dependabot-secrets.json
 
   # Set Dependabot secret for all backend repositories
-  $ gh secrets-manager dependabot set --org myorg --property team --prop-value backend --name MAVEN_PASSWORD --value "secret123"`,
+  $ gh secrets-manager dependabot set --org myorg --property team --prop_value backend --name MAVEN_PASSWORD --value "secret123"`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runSetDependabotSecrets(cmd, opts)
 		},
@@ -113,7 +113,7 @@ Usage:
   $ gh secrets-manager dependabot delete --repo owner/repo --name SECRET_NAME
 
   # Delete a Dependabot secret from repositories with specific property
-  $ gh secrets-manager dependabot delete --org myorg --property team --prop-value backend --name NPM_TOKEN`,
+  $ gh secrets-manager dependabot delete --org myorg --property team --prop_value backend --name NPM_TOKEN`,
 		Example: `  # Delete a Dependabot secret from an organization
   $ gh secrets-manager dependabot delete --org myorg --name NPM_TOKEN
 
@@ -121,7 +121,7 @@ Usage:
   $ gh secrets-manager dependabot delete --repo owner/repo --name NUGET_TOKEN
 
   # Delete a Dependabot secret from all frontend repositories
-  $ gh secrets-manager dependabot delete --org myorg --property team --prop-value frontend --name DOCKER_PASSWORD`,
+  $ gh secrets-manager dependabot delete --org myorg --property team --prop_value frontend --name DOCKER_PASSWORD`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDeleteDependabotSecrets(cmd, opts)
 		},
@@ -154,7 +154,7 @@ func runListDependabotSecrets(cmd *cobra.Command, opts *api.ClientOptions) error
 	org, _ := cmd.Flags().GetString("org")
 	repo, _ := cmd.Flags().GetString("repo")
 	property, _ := cmd.Flags().GetString("property")
-	value, _ := cmd.Flags().GetString("prop-value")
+	value, _ := cmd.Flags().GetString("prop_value")
 
 	if org != "" {
 		if property != "" && value != "" {
@@ -211,7 +211,7 @@ func runSetDependabotSecrets(cmd *cobra.Command, opts *api.ClientOptions) error 
 	}
 
 	name, _ := cmd.Flags().GetString("name")
-	value, _ := cmd.Flags().GetString("secret-value")
+	value, _ := cmd.Flags().GetString("value")
 	if name == "" || value == "" {
 		return fmt.Errorf("both --name and --value flags are required when not using a file")
 	}
@@ -219,7 +219,7 @@ func runSetDependabotSecrets(cmd *cobra.Command, opts *api.ClientOptions) error 
 	org, _ := cmd.Flags().GetString("org")
 	repo, _ := cmd.Flags().GetString("repo")
 	property, _ := cmd.Flags().GetString("property")
-	propValue, _ := cmd.Flags().GetString("prop-value")
+	propValue, _ := cmd.Flags().GetString("prop_value")
 
 	secret := &github.EncryptedSecret{
 		Name:           name,
@@ -270,7 +270,7 @@ func runDeleteDependabotSecrets(cmd *cobra.Command, opts *api.ClientOptions) err
 	org, _ := cmd.Flags().GetString("org")
 	repo, _ := cmd.Flags().GetString("repo")
 	property, _ := cmd.Flags().GetString("property")
-	value, _ := cmd.Flags().GetString("prop-value")
+	value, _ := cmd.Flags().GetString("prop_value")
 
 	if org != "" {
 		if property != "" && value != "" {
@@ -323,7 +323,7 @@ func handleDependabotFileInput(cmd *cobra.Command, client *api.Client, filePath 
 	org, _ := cmd.Flags().GetString("org")
 	repo, _ := cmd.Flags().GetString("repo")
 	property, _ := cmd.Flags().GetString("property")
-	value, _ := cmd.Flags().GetString("prop-value")
+	value, _ := cmd.Flags().GetString("prop_value")
 
 	var lastErr error
 	if org != "" {

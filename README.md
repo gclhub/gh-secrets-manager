@@ -170,21 +170,23 @@ gh secrets-manager secrets list --org myorg
 gh secrets-manager secrets list --repo owner/repo
 
 # List secrets for repositories with specific property
-gh secrets-manager secrets list --org myorg --property language --value go
+gh secrets-manager secrets list --org myorg --property team --prop_value backend
 
 # Create/update organization secret
-gh secrets-manager secrets set --org myorg --name SECRET_NAME --value "secret_value"
+gh secrets-manager secrets set --org myorg --name API_KEY --value "secret123"
 
 # Create/update repository secret
-gh secrets-manager secrets set --repo owner/repo --name SECRET_NAME --value "secret_value"
+gh secrets-manager secrets set --repo owner/repo --name DB_PASS --value "dbpass"
 
 # Import secrets from file
 gh secrets-manager secrets set --org myorg --file secrets.json
-gh secrets-manager secrets set --repo owner/repo --file secrets.csv
+
+# Set secret for specific repositories
+gh secrets-manager secrets set --org myorg --property team --prop_value frontend --name NPM_TOKEN --value "npmtoken"
 
 # Delete secret
-gh secrets-manager secrets delete --org myorg --name SECRET_NAME
-gh secrets-manager secrets delete --repo owner/repo --name SECRET_NAME
+gh secrets-manager secrets delete --org myorg --name API_KEY
+gh secrets-manager secrets delete --repo owner/repo --name DB_PASS
 ```
 
 ### Managing Variables
@@ -196,11 +198,17 @@ gh secrets-manager variables list --org myorg
 # List repository variables
 gh secrets-manager variables list --repo owner/repo
 
+# List variables for repositories with specific property
+gh secrets-manager variables list --org myorg --property team --prop_value backend
+
 # Create/update organization variable
 gh secrets-manager variables set --org myorg --name VAR_NAME --value "value"
 
 # Create/update repository variable
 gh secrets-manager variables set --repo owner/repo --name VAR_NAME --value "value"
+
+# Set variable for specific repositories
+gh secrets-manager variables set --org myorg --property team --prop_value frontend --name CONFIG_ENV --value "production"
 
 # Import variables from file
 gh secrets-manager variables set --org myorg --file variables.json
@@ -220,19 +228,25 @@ gh secrets-manager dependabot list --org myorg
 # List repository Dependabot secrets
 gh secrets-manager dependabot list --repo owner/repo
 
+# List Dependabot secrets for repositories with specific property
+gh secrets-manager dependabot list --org myorg --property team --prop_value backend
+
 # Create/update organization Dependabot secret
-gh secrets-manager dependabot set --org myorg --name SECRET_NAME --value "secret_value"
+gh secrets-manager dependabot set --org myorg --name NPM_TOKEN --value "npmtoken"
 
 # Create/update repository Dependabot secret
-gh secrets-manager dependabot set --repo owner/repo --name SECRET_NAME --value "secret_value"
+gh secrets-manager dependabot set --repo owner/repo --name DOCKER_TOKEN --value "dockertoken"
+
+# Set Dependabot secret for specific repositories
+gh secrets-manager dependabot set --org myorg --property team --prop_value backend --name MAVEN_PASSWORD --value "mavenpass"
 
 # Import Dependabot secrets from file
-gh secrets-manager dependabot set --org myorg --file secrets.json
-gh secrets-manager dependabot set --repo owner/repo --file secrets.csv
+gh secrets-manager dependabot set --org myorg --file dependabot-secrets.json
+gh secrets-manager dependabot set --repo owner/repo --file dependabot-secrets.csv
 
 # Delete Dependabot secret
-gh secrets-manager dependabot delete --org myorg --name SECRET_NAME
-gh secrets-manager dependabot delete --repo owner/repo --name SECRET_NAME
+gh secrets-manager dependabot delete --org myorg --name NPM_TOKEN
+gh secrets-manager dependabot delete --repo owner/repo --name DOCKER_TOKEN
 ```
 
 ## Input File Formats

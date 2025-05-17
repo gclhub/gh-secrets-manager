@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"gh-secrets-manager/pkg/api"
+	"gh-secrets-manager/pkg/config"
 	"gh-secrets-manager/pkg/version"
 
 	"github.com/spf13/cobra"
@@ -20,9 +21,9 @@ func main() {
 
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "secrets-manager", // Removed gh prefix from here since it's in the template
-		Short: "GitHub CLI extension for managing GitHub Actions secrets and variables",
-		Long:  `A GitHub CLI extension for managing GitHub Actions secrets and variables, and Dependabot secrets at both organization and repository levels.`,
+		Use:     "secrets-manager",
+		Short:   "GitHub CLI extension for managing GitHub Actions secrets and variables",
+		Long:    `A GitHub CLI extension for managing GitHub Actions secrets and variables, and Dependabot secrets at both organization and repository levels.`,
 		Version: fmt.Sprintf("%s (%s)", version.Version, version.CommitHash),
 		Run: func(cmd *cobra.Command, args []string) {
 			cmd.Help()
@@ -52,9 +53,18 @@ Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
 Use "gh {{.CommandPath}} [command] --help" for more information about a command.{{end}}
 `)
 
-	// Initialize GitHub App client options
-	opts := &api.ClientOptions{
-		AuthMethod: api.AuthMethodPAT, // Default to PAT auth
+	// Initialize client options - try GitHub App first, fall back to PAT
+	cfg, err := config.Load()
+	var opts *api.ClientOptions
+	if err != nil || !cfg.IsGitHubAppConfigured() {
+		opts = &api.ClientOptions{AuthMethod: api.AuthMethodPAT}
+	} else {
+		opts = &api.ClientOptions{
+			AuthMethod:     api.AuthMethodGitHubApp,
+			AppID:          cfg.AppID,
+			InstallationID: cfg.InstallationID,
+			AuthServer:     cfg.AuthServer,
+		}
 	}
 
 	// Add and initialize all commands

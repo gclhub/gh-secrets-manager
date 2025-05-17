@@ -38,7 +38,7 @@ Usage:
   $ gh secrets-manager variables list --repo owner/repo --environment prod
 
   # List variables for repositories with specific property
-  $ gh secrets-manager variables list --org myorg --property team --prop-value backend`,
+  $ gh secrets-manager variables list --org myorg --property team --prop_value backend`,
 		Example: `  # List all variables in an organization
   $ gh secrets-manager variables list --org myorg
 
@@ -49,7 +49,7 @@ Usage:
   $ gh secrets-manager variables list --repo owner/repo --environment prod
 
   # List variables in all frontend repos
-  $ gh secrets-manager variables list --org myorg --property team --prop-value frontend`,
+  $ gh secrets-manager variables list --org myorg --property team --prop_value frontend`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runListVariables(cmd, opts)
 		},
@@ -79,7 +79,7 @@ Usage:
   $ gh secrets-manager variables set --org myorg --file variables.json
 
   # Set variable for specific repositories
-  $ gh secrets-manager variables set --org myorg --property team --prop-value backend --name DB_HOST --value "db.example.com"
+  $ gh secrets-manager variables set --org myorg --property team --prop_value backend --name DB_HOST --value "db.example.com"
 
   # Set environment variable
   $ gh secrets-manager variables set --repo owner/repo --environment prod --name API_URL --value "api.example.com"`,
@@ -93,7 +93,7 @@ Usage:
   $ gh secrets-manager variables set --org myorg --file variables.json
 
   # Set variable for all backend repositories
-  $ gh secrets-manager variables set --org myorg --property team --prop-value backend --name LOG_LEVEL --value "info"
+  $ gh secrets-manager variables set --org myorg --property team --prop_value backend --name LOG_LEVEL --value "info"
 
   # Set variable in an environment
   $ gh secrets-manager variables set --repo owner/repo --environment prod --name API_URL --value "api.example.com"`,
@@ -116,7 +116,7 @@ Usage:
   $ gh secrets-manager variables delete --repo owner/repo --name VAR_NAME
 
   # Delete a variable from repositories with specific property
-  $ gh secrets-manager variables delete --org myorg --property team --prop-value backend --name DB_HOST
+  $ gh secrets-manager variables delete --org myorg --property team --prop_value backend --name DB_HOST
 
   # Delete an environment variable
   $ gh secrets-manager variables delete --repo owner/repo --environment prod --name VAR_NAME`,
@@ -127,7 +127,7 @@ Usage:
   $ gh secrets-manager variables delete --repo owner/repo --name PORT
 
   # Delete a variable from all frontend repositories
-  $ gh secrets-manager variables delete --org myorg --property team --prop-value frontend --name API_URL
+  $ gh secrets-manager variables delete --org myorg --property team --prop_value frontend --name API_URL
 
   # Delete a variable from an environment
   $ gh secrets-manager variables delete --repo owner/repo --environment prod --name API_URL`,
@@ -164,7 +164,7 @@ func runListVariables(cmd *cobra.Command, opts *api.ClientOptions) error {
 	org, _ := cmd.Flags().GetString("org")
 	repo, _ := cmd.Flags().GetString("repo")
 	property, _ := cmd.Flags().GetString("property")
-	value, _ := cmd.Flags().GetString("prop-value")
+	value, _ := cmd.Flags().GetString("prop_value")
 	environment, _ := cmd.Flags().GetString("environment")
 
 	if org != "" {
@@ -238,7 +238,7 @@ func runSetVariables(cmd *cobra.Command, opts *api.ClientOptions) error {
 	org, _ := cmd.Flags().GetString("org")
 	repo, _ := cmd.Flags().GetString("repo")
 	property, _ := cmd.Flags().GetString("property")
-	propValue, _ := cmd.Flags().GetString("prop-value")
+	propValue, _ := cmd.Flags().GetString("prop_value")
 	environment, _ := cmd.Flags().GetString("environment")
 
 	variable := &api.Variable{
@@ -294,7 +294,7 @@ func runDeleteVariables(cmd *cobra.Command, opts *api.ClientOptions) error {
 	org, _ := cmd.Flags().GetString("org")
 	repo, _ := cmd.Flags().GetString("repo")
 	property, _ := cmd.Flags().GetString("property")
-	value, _ := cmd.Flags().GetString("prop-value")
+	value, _ := cmd.Flags().GetString("prop_value")
 	environment, _ := cmd.Flags().GetString("environment")
 
 	if org != "" {
@@ -352,7 +352,7 @@ func handleVariableFileInput(cmd *cobra.Command, client *api.Client, filePath st
 	org, _ := cmd.Flags().GetString("org")
 	repo, _ := cmd.Flags().GetString("repo")
 	property, _ := cmd.Flags().GetString("property")
-	value, _ := cmd.Flags().GetString("prop-value")
+	value, _ := cmd.Flags().GetString("prop_value")
 	environment, _ := cmd.Flags().GetString("environment")
 
 	var lastErr error
