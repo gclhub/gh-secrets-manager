@@ -2,87 +2,66 @@ package api
 
 import (
 	"fmt"
+
 	"github.com/google/go-github/v45/github"
 )
 
-// ListRepositoriesByProperty returns all repositories in an organization that have a specific property value
+// ListRepositoriesByProperty returns all repositories in an organization that have a specific custom property value
 func (c *Client) ListRepositoriesByProperty(org, propertyName, propertyValue string) ([]*github.Repository, error) {
+	if err := c.ensureValidToken(); err != nil {
+		return nil, err
+	}
+
+	// Validate required parameters
+	if org == "" {
+		return nil, fmt.Errorf("organization name cannot be empty")
+	}
+	if propertyName == "" {
+		return nil, fmt.Errorf("property_name cannot be empty")
+	}
+	if propertyValue == "" {
+		return nil, fmt.Errorf("property value cannot be empty")
+	}
+
 	var matchingRepos []*github.Repository
-	opts := &github.RepositoryListByOrgOptions{
-		ListOptions: github.ListOptions{PerPage: 100},
-	}
+	page := 1
 
+	// Use the custom properties API to get repositories with the specific property value
 	for {
-		repos, resp, err := c.github.Repositories.ListByOrg(c.ctx, org, opts)
+		url := fmt.Sprintf("orgs/%s/properties/values?property_name=%s&value=%s&page=%d&per_page=100",
+			org, propertyName, propertyValue, page)
+
+		req, err := c.github.NewRequest("GET", url, nil)
 		if err != nil {
-			return nil, fmt.Errorf("failed to list repositories: %w", err)
-		}
-
-		for _, repo := range repos {
-			matches, err := c.hasProperty(repo, propertyName, propertyValue)
-			if err != nil {
-				// Log the error but continue processing other repositories
-				fmt.Printf("Warning: Failed to check property for %s: %v\n", repo.GetName(), err)
-				continue
-			}
-			if matches {
-				matchingRepos = append(matchingRepos, repo)
-			}
-		}
-
-		if resp.NextPage == 0 {
-			break
-		}
-		opts.Page = resp.NextPage
-	}
-
-	return matchingRepos, nil
-}
-
-// hasProperty checks if a repository has the specified property with the given value
-func (c *Client) hasProperty(repo *github.Repository, propertyName, propertyValue string) (bool, error) {
-	// First check common properties
-	switch propertyName {
-	case "name":
-		return repo.GetName() == propertyValue, nil
-	case "description":
-		return repo.GetDescription() == propertyValue, nil
-	case "language":
-		return repo.GetLanguage() == propertyValue, nil
-	case "visibility":
-		return repo.GetVisibility() == propertyValue, nil
-	case "is_private":
-		return repo.GetPrivate() == (propertyValue == "true"), nil
-	case "has_issues":
-		return repo.GetHasIssues() == (propertyValue == "true"), nil
-	case "has_wiki":
-		return repo.GetHasWiki() == (propertyValue == "true"), nil
-	case "archived":
-		return repo.GetArchived() == (propertyValue == "true"), nil
-	case "disabled":
-		return repo.GetDisabled() == (propertyValue == "true"), nil
-	case "topic":
-		// Make a direct API call to get repository topics
-		req, err := c.github.NewRequest("GET", fmt.Sprintf("repos/%s/%s/topics", repo.GetOwner().GetLogin(), repo.GetName()), nil)
-		if err != nil {
-			return false, fmt.Errorf("failed to create request: %w", err)
+			return nil, fmt.Errorf("failed to create request: %w", err)
 		}
 
 		var response struct {
-			Names []string `json:"names"`
+			Repositories []struct {
+				Name string `json:"name"`
+			} `json:"repositories"`
+			HasNextPage bool `json:"has_next_page"`
 		}
 		_, err = c.github.Do(c.ctx, req, &response)
 		if err != nil {
-			return false, fmt.Errorf("failed to get topics: %w", err)
+			return nil, fmt.Errorf("failed to get repositories by property: %w", err)
 		}
 
-		for _, topic := range response.Names {
-			if topic == propertyValue {
-				return true, nil
+		// Get full repository objects for each matching repository
+		for _, repoInfo := range response.Repositories {
+			repo, _, err := c.github.Repositories.Get(c.ctx, org, repoInfo.Name)
+			if err != nil {
+				fmt.Printf("Warning: Failed to get repository %s: %v\n", repoInfo.Name, err)
+				continue
 			}
+			matchingRepos = append(matchingRepos, repo)
 		}
-		return false, nil
+
+		if !response.HasNextPage {
+			break
+		}
+		page++
 	}
 
-	return false, nil
+	return matchingRepos, nil
 }

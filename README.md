@@ -247,6 +247,24 @@ gh secrets-manager secrets delete --org myorg --name API_KEY
 gh secrets-manager secrets delete --repo owner/repo --name DB_PASS
 ```
 
+### Managing Environment Secrets
+
+You can manage secrets specific to GitHub Actions environments within a repository:
+
+```bash
+# List environment secrets
+gh secrets-manager secrets list --repo owner/repo --environment prod
+
+# Create/update environment secret
+gh secrets-manager secrets set --repo owner/repo --environment prod --name SECRET_NAME --value "secret123"
+
+# Delete environment secret
+gh secrets-manager secrets delete --repo owner/repo --environment prod --name SECRET_NAME
+
+# Import multiple environment secrets from file
+gh secrets-manager secrets set --repo owner/repo --environment prod --file env-secrets.json
+```
+
 ### Managing Variables
 
 ```bash
@@ -275,6 +293,24 @@ gh secrets-manager variables set --repo owner/repo --file variables.csv
 # Delete variable
 gh secrets-manager variables delete --org myorg --name VAR_NAME
 gh secrets-manager variables delete --repo owner/repo --name VAR_NAME
+```
+
+### Managing Environment Variables
+
+Similarly, you can manage environment-specific variables:
+
+```bash
+# List environment variables
+gh secrets-manager variables list --repo owner/repo --environment prod
+
+# Create/update environment variable
+gh secrets-manager variables set --repo owner/repo --environment prod --name VAR_NAME --value "value123"
+
+# Delete environment variable
+gh secrets-manager variables delete --repo owner/repo --environment prod --name VAR_NAME
+
+# Import multiple environment variables from file
+gh secrets-manager variables set --repo owner/repo --environment prod --file env-variables.json
 ```
 
 ### Managing Dependabot Secrets
@@ -343,15 +379,25 @@ ANOTHER_SECRET,another_value
 
 ## Repository Property Filtering
 
-When using the `--property` and `--value` flags, you can filter repositories by:
+The `--property` and `--prop_value` flags allow you to target multiple repositories based on GitHub custom repository properties.
 
-- `name`: Repository name
-- `description`: Repository description
-- `language`: Primary programming language
-- `visibility`: Repository visibility (public/private)
-- `is_private`: Private repository status (true/false)
-- `has_issues`: Issues enabled status (true/false)
-- `has_wiki`: Wiki enabled status (true/false)
-- `archived`: Archive status (true/false)
-- `disabled`: Disabled status (true/false)
-- Repository topics (matches any topic)
+First, define custom properties in your organization's settings:
+1. Go to your organization's settings
+2. Navigate to Repository defaults > Properties
+3. Add custom properties like `team`, `environment`, `service-tier`, etc.
+4. Assign property values to your repositories
+
+Then use these properties to target specific repositories:
+
+```bash
+# Set secrets for all backend team repositories
+gh secrets-manager secrets set --org myorg --property team --prop_value backend --name DB_PASSWORD --value "secret123"
+
+# Update config for all production tier repositories
+gh secrets-manager variables set --org myorg --property service-tier --prop_value production --name API_URL --value "prod.api.example.com"
+
+# Set variables for staging repositories
+gh secrets-manager variables set --org myorg --property environment --prop_value staging --name LOG_LEVEL --value "debug"
+```
+
+Note: This feature requires that you have defined custom properties in your organization's settings and assigned values to repositories.

@@ -40,3 +40,13 @@ dist/
 /gh-secrets-manager
 auth-server/bin/
 auth-server/dist/
+
+# Common backup files
+*.bak
+*.tmp
+*.old
+*.orig
+*~
+# Emacs and Vim swap/backup
+*#
+.#*
