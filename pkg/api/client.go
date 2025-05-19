@@ -290,8 +290,28 @@ func (c *Client) CreateOrUpdateOrgSecret(org string, secret *github.EncryptedSec
 		return err
 	}
 
-	_, err = c.github.Actions.CreateOrUpdateOrgSecret(c.ctx, org, encryptedSecret)
-	return err
+	// Custom implementation that uses github.Client's underlying HTTP client
+	// instead of using github.Actions.CreateOrUpdateOrgSecret
+	url := fmt.Sprintf("orgs/%s/actions/secrets/%s", org, encryptedSecret.Name)
+	req := struct {
+		EncryptedValue string `json:"encrypted_value"`
+		KeyID          string `json:"key_id"`
+	}{
+		EncryptedValue: encryptedSecret.EncryptedValue,
+		KeyID:          encryptedSecret.KeyID,
+	}
+	
+	httpReq, err := c.github.NewRequest("PUT", url, req)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	
+	_, err = c.github.Do(c.ctx, httpReq, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create/update organization secret: %w", err)
+	}
+	
+	return nil
 }
 
 func (c *Client) CreateOrUpdateRepoSecret(owner, repo string, secret *github.EncryptedSecret) error {
@@ -309,8 +329,28 @@ func (c *Client) CreateOrUpdateRepoSecret(owner, repo string, secret *github.Enc
 		return err
 	}
 
-	_, err = c.github.Actions.CreateOrUpdateRepoSecret(c.ctx, owner, repo, encryptedSecret)
-	return err
+	// Custom implementation that uses github.Client's underlying HTTP client
+	// instead of using github.Actions.CreateOrUpdateRepoSecret
+	url := fmt.Sprintf("repos/%s/%s/actions/secrets/%s", owner, repo, encryptedSecret.Name)
+	req := struct {
+		EncryptedValue string `json:"encrypted_value"`
+		KeyID          string `json:"key_id"`
+	}{
+		EncryptedValue: encryptedSecret.EncryptedValue,
+		KeyID:          encryptedSecret.KeyID,
+	}
+	
+	httpReq, err := c.github.NewRequest("PUT", url, req)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	
+	_, err = c.github.Do(c.ctx, httpReq, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create/update repository secret: %w", err)
+	}
+	
+	return nil
 }
 
 func (c *Client) DeleteOrgSecret(org, secretName string) error {
@@ -318,10 +358,19 @@ func (c *Client) DeleteOrgSecret(org, secretName string) error {
 		return err
 	}
 
-	_, err := c.github.Actions.DeleteOrgSecret(c.ctx, org, secretName)
+	// Custom implementation that uses github.Client's underlying HTTP client
+	// instead of using github.Actions.DeleteOrgSecret
+	url := fmt.Sprintf("orgs/%s/actions/secrets/%s", org, secretName)
+	req, err := c.github.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	
+	_, err = c.github.Do(c.ctx, req, nil)
 	if err != nil {
 		return fmt.Errorf("failed to delete organization secret: %w", err)
 	}
+	
 	return nil
 }
 
@@ -330,10 +379,19 @@ func (c *Client) DeleteRepoSecret(owner, repo, secretName string) error {
 		return err
 	}
 
-	_, err := c.github.Actions.DeleteRepoSecret(c.ctx, owner, repo, secretName)
+	// Custom implementation that uses github.Client's underlying HTTP client
+	// instead of using github.Actions.DeleteRepoSecret
+	url := fmt.Sprintf("repos/%s/%s/actions/secrets/%s", owner, repo, secretName)
+	req, err := c.github.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	
+	_, err = c.github.Do(c.ctx, req, nil)
 	if err != nil {
 		return fmt.Errorf("failed to delete repository secret: %w", err)
 	}
+	
 	return nil
 }
 
@@ -512,12 +570,20 @@ func (c *Client) CreateOrUpdateOrgDependabotSecret(org string, secret *github.En
 	}
 
 	url := fmt.Sprintf("orgs/%s/dependabot/secrets/%s", org, secret.Name)
-	req, err := c.github.NewRequest("PUT", url, encryptedSecret)
+	req := struct {
+		EncryptedValue string `json:"encrypted_value"`
+		KeyID          string `json:"key_id"`
+	}{
+		EncryptedValue: encryptedSecret.EncryptedValue,
+		KeyID:          encryptedSecret.KeyID,
+	}
+	
+	httpReq, err := c.github.NewRequest("PUT", url, req)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	_, err = c.github.Do(c.ctx, req, nil)
+	_, err = c.github.Do(c.ctx, httpReq, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create/update organization Dependabot secret: %w", err)
 	}

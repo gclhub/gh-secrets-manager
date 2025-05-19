@@ -22,6 +22,7 @@ func (c *Client) GetOrgPublicKey(org string) (*SecretEncryption, error) {
 	}
 
 	url := fmt.Sprintf("orgs/%s/actions/secrets/public-key", org)
+	fmt.Printf("[DEBUG] GetOrgPublicKey creating request for URL: %s\n", url)
 	req, err := c.github.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -31,15 +32,18 @@ func (c *Client) GetOrgPublicKey(org string) (*SecretEncryption, error) {
 		KeyID string `json:"key_id"`
 		Key   string `json:"key"`
 	}
+	fmt.Printf("[DEBUG] GetOrgPublicKey sending request: %s %s\n", req.Method, req.URL.String())
 	_, err = c.github.Do(c.ctx, req, &key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get organization public key: %w", err)
 	}
+	fmt.Printf("[DEBUG] GetOrgPublicKey got response: KeyID=%s, Key=%s\n", key.KeyID, key.Key)
 
 	publicKey, err := base64.StdEncoding.DecodeString(key.Key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode public key: %w", err)
 	}
+	fmt.Printf("[DEBUG] GetOrgPublicKey decoded key length: %d\n", len(publicKey))
 
 	return &SecretEncryption{
 		KeyID:     key.KeyID,
@@ -49,54 +53,108 @@ func (c *Client) GetOrgPublicKey(org string) (*SecretEncryption, error) {
 
 // GetRepoPublicKey fetches the public key for encrypting repository secrets
 func (c *Client) GetRepoPublicKey(owner, repo string) (*SecretEncryption, error) {
-	key, _, err := c.github.Actions.GetRepoPublicKey(c.ctx, owner, repo)
+	if err := c.ensureValidToken(); err != nil {
+		return nil, err
+	}
+
+	url := fmt.Sprintf("repos/%s/%s/actions/secrets/public-key", owner, repo)
+	fmt.Printf("[DEBUG] GetRepoPublicKey creating request for URL: %s\n", url)
+	req, err := c.github.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	var key struct {
+		KeyID string `json:"key_id"`
+		Key   string `json:"key"`
+	}
+	fmt.Printf("[DEBUG] GetRepoPublicKey sending request: %s %s\n", req.Method, req.URL.String())
+	_, err = c.github.Do(c.ctx, req, &key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get repository public key: %w", err)
 	}
+	fmt.Printf("[DEBUG] GetRepoPublicKey got response: KeyID=%s, Key=%s\n", key.KeyID, key.Key)
 
-	publicKey, err := base64.StdEncoding.DecodeString(key.GetKey())
+	publicKey, err := base64.StdEncoding.DecodeString(key.Key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode public key: %w", err)
 	}
+	fmt.Printf("[DEBUG] GetRepoPublicKey decoded key length: %d\n", len(publicKey))
 
 	return &SecretEncryption{
-		KeyID:     key.GetKeyID(),
+		KeyID:     key.KeyID,
 		PublicKey: publicKey,
 	}, nil
 }
 
 // GetOrgDependabotPublicKey fetches the public key for encrypting organization Dependabot secrets
 func (c *Client) GetOrgDependabotPublicKey(org string) (*SecretEncryption, error) {
-	key, _, err := c.github.Dependabot.GetOrgPublicKey(c.ctx, org)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get organization Dependabot public key: %w", err)
+	if err := c.ensureValidToken(); err != nil {
+		return nil, err
 	}
 
-	publicKey, err := base64.StdEncoding.DecodeString(key.GetKey())
+	url := fmt.Sprintf("orgs/%s/dependabot/secrets/public-key", org)
+	fmt.Printf("[DEBUG] GetOrgDependabotPublicKey creating request for URL: %s\n", url)
+	req, err := c.github.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	var key struct {
+		KeyID string `json:"key_id"`
+		Key   string `json:"key"`
+	}
+	fmt.Printf("[DEBUG] GetOrgDependabotPublicKey sending request: %s %s\n", req.Method, req.URL.String())
+	_, err = c.github.Do(c.ctx, req, &key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get org dependabot public key: %w", err)
+	}
+	fmt.Printf("[DEBUG] GetOrgDependabotPublicKey got response: KeyID=%s, Key=%s\n", key.KeyID, key.Key)
+
+	publicKey, err := base64.StdEncoding.DecodeString(key.Key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode public key: %w", err)
 	}
+	fmt.Printf("[DEBUG] GetOrgDependabotPublicKey decoded key length: %d\n", len(publicKey))
 
 	return &SecretEncryption{
-		KeyID:     key.GetKeyID(),
+		KeyID:     key.KeyID,
 		PublicKey: publicKey,
 	}, nil
 }
 
 // GetRepoDependabotPublicKey fetches the public key for encrypting repository Dependabot secrets
 func (c *Client) GetRepoDependabotPublicKey(owner, repo string) (*SecretEncryption, error) {
-	key, _, err := c.github.Dependabot.GetRepoPublicKey(c.ctx, owner, repo)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get repository Dependabot public key: %w", err)
+	if err := c.ensureValidToken(); err != nil {
+		return nil, err
 	}
 
-	publicKey, err := base64.StdEncoding.DecodeString(key.GetKey())
+	url := fmt.Sprintf("repos/%s/%s/dependabot/secrets/public-key", owner, repo)
+	fmt.Printf("[DEBUG] GetRepoDependabotPublicKey creating request for URL: %s\n", url)
+	req, err := c.github.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	var key struct {
+		KeyID string `json:"key_id"`
+		Key   string `json:"key"`
+	}
+	fmt.Printf("[DEBUG] GetRepoDependabotPublicKey sending request: %s %s\n", req.Method, req.URL.String())
+	_, err = c.github.Do(c.ctx, req, &key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get repo dependabot public key: %w", err)
+	}
+	fmt.Printf("[DEBUG] GetRepoDependabotPublicKey got response: KeyID=%s, Key=%s\n", key.KeyID, key.Key)
+
+	publicKey, err := base64.StdEncoding.DecodeString(key.Key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode public key: %w", err)
 	}
+	fmt.Printf("[DEBUG] GetRepoDependabotPublicKey decoded key length: %d\n", len(publicKey))
 
 	return &SecretEncryption{
-		KeyID:     key.GetKeyID(),
+		KeyID:     key.KeyID,
 		PublicKey: publicKey,
 	}, nil
 }
