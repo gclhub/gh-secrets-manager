@@ -749,3 +749,16 @@ func (c *Client) DeleteEnvironmentVariable(owner, repo, environment, name string
 	}
 	return nil
 }
+
+// Wrappers for environment variable methods to match test expectations
+func (c *Client) ListEnvVariables(owner, repo, environment string) ([]*Variable, error) {
+	return c.ListEnvironmentVariables(owner, repo, environment)
+}
+
+func (c *Client) CreateOrUpdateEnvVariable(owner, repo, environment string, variable *Variable) error {
+	return c.CreateOrUpdateEnvironmentVariable(owner, repo, environment, variable)
+}
+
+func (c *Client) DeleteEnvVariable(owner, repo, environment, name string) error {
+	return c.DeleteEnvironmentVariable(owner, repo, environment, name)
+}

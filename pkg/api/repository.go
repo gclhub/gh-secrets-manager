@@ -51,8 +51,7 @@ func (c *Client) ListRepositoriesByProperty(org, propertyName, propertyValue str
 		for _, repoInfo := range response.Repositories {
 			repo, _, err := c.github.Repositories.Get(c.ctx, org, repoInfo.Name)
 			if err != nil {
-				fmt.Printf("Warning: Failed to get repository %s: %v\n", repoInfo.Name, err)
-				continue
+				return nil, fmt.Errorf("failed to get repository %s: %w", repoInfo.Name, err)
 			}
 			matchingRepos = append(matchingRepos, repo)
 		}

@@ -55,6 +55,30 @@ func setupTestServer(t *testing.T, path string, response interface{}) (*httptest
 	return server, client
 }
 
+func setupMultiHandlerTestServer(t *testing.T, handlers map[string]http.HandlerFunc) (*httptest.Server, *Client) {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for prefix, handler := range handlers {
+			if strings.HasPrefix(r.URL.Path, prefix) {
+				handler(w, r)
+				return
+			}
+		}
+		t.Errorf("Unexpected path: %s", r.URL.Path)
+		http.NotFound(w, r)
+	}))
+
+	httpClient := &http.Client{}
+	client := &Client{
+		github: github.NewClient(httpClient),
+		ctx:    context.Background(),
+		opts:   &ClientOptions{AuthMethod: AuthMethodPAT},
+	}
+	client.github.BaseURL, _ = url.Parse(server.URL + "/")
+
+	return server, client
+}
+
 func TestListOrgSecrets(t *testing.T) {
 	response := &github.Secrets{
 		Secrets: []*github.Secret{
@@ -101,33 +125,31 @@ func TestListRepositoriesByProperty(t *testing.T) {
 			HasNextPage: false,
 		}
 
-		server1, client := setupTestServer(t, "/orgs/testorg/properties/values", propertyResponse)
-		defer server1.Close()
-
 		repos := map[string]*github.Repository{
 			"repo1": {Name: github.String("repo1"), FullName: github.String("testorg/repo1")},
 			"repo3": {Name: github.String("repo3"), FullName: github.String("testorg/repo3")},
 		}
 
-		server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			parts := strings.Split(r.URL.Path, "/")
-			if len(parts) < 4 {
-				t.Errorf("Invalid path: %s", r.URL.Path)
-				http.NotFound(w, r)
-				return
-			}
-			repoName := parts[len(parts)-1]
-			if repo, ok := repos[repoName]; ok {
+		handlers := map[string]http.HandlerFunc{
+			"/orgs/testorg/properties/values": func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(repo)
-				return
-			}
-			t.Errorf("Unexpected repository request: %s", repoName)
-			http.NotFound(w, r)
-		}))
-		defer server2.Close()
+				json.NewEncoder(w).Encode(propertyResponse)
+			},
+			"/repos/testorg/": func(w http.ResponseWriter, r *http.Request) {
+				parts := strings.Split(r.URL.Path, "/")
+				repoName := parts[len(parts)-1]
+				if repo, ok := repos[repoName]; ok {
+					w.Header().Set("Content-Type", "application/json")
+					json.NewEncoder(w).Encode(repo)
+					return
+				}
+				t.Errorf("Unexpected repository request: %s", repoName)
+				http.NotFound(w, r)
+			},
+		}
 
-		client.github.BaseURL, _ = url.Parse(server2.URL + "/")
+		server, client := setupMultiHandlerTestServer(t, handlers)
+		defer server.Close()
 
 		matchingRepos, err := client.ListRepositoriesByProperty("testorg", "team", "backend")
 		if err != nil {
@@ -159,45 +181,34 @@ func TestListRepositoriesByProperty(t *testing.T) {
 			},
 		}
 
-		server1, client := setupTestServer(t, "/orgs/testorg/properties/values", nil)
-		server1.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !strings.Contains(r.URL.Path, "/orgs/testorg/properties/values") {
-				t.Errorf("Unexpected path: %s", r.URL.Path)
-				http.NotFound(w, r)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(responses[pageNum])
-			if pageNum < len(responses)-1 {
-				pageNum++
-			}
-		})
-		defer server1.Close()
-
 		repos := map[string]*github.Repository{
 			"repo1": {Name: github.String("repo1"), FullName: github.String("testorg/repo1")},
 			"repo3": {Name: github.String("repo3"), FullName: github.String("testorg/repo3")},
 		}
 
-		server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			parts := strings.Split(r.URL.Path, "/")
-			if len(parts) < 4 {
-				t.Errorf("Invalid path: %s", r.URL.Path)
-				http.NotFound(w, r)
-				return
-			}
-			repoName := parts[len(parts)-1]
-			if repo, ok := repos[repoName]; ok {
+		handlers := map[string]http.HandlerFunc{
+			"/orgs/testorg/properties/values": func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(repo)
-				return
-			}
-			t.Errorf("Unexpected repository request: %s", repoName)
-			http.NotFound(w, r)
-		}))
-		defer server2.Close()
+				json.NewEncoder(w).Encode(responses[pageNum])
+				if pageNum < len(responses)-1 {
+					pageNum++
+				}
+			},
+			"/repos/testorg/": func(w http.ResponseWriter, r *http.Request) {
+				parts := strings.Split(r.URL.Path, "/")
+				repoName := parts[len(parts)-1]
+				if repo, ok := repos[repoName]; ok {
+					w.Header().Set("Content-Type", "application/json")
+					json.NewEncoder(w).Encode(repo)
+					return
+				}
+				t.Errorf("Unexpected repository request: %s", repoName)
+				http.NotFound(w, r)
+			},
+		}
 
-		client.github.BaseURL, _ = url.Parse(server2.URL + "/")
+		server, client := setupMultiHandlerTestServer(t, handlers)
+		defer server.Close()
 
 		matchingRepos, err := client.ListRepositoriesByProperty("testorg", "team", "backend")
 		if err != nil {
@@ -219,8 +230,13 @@ func TestListRepositoriesByProperty(t *testing.T) {
 
 func TestListRepositoriesByPropertyErrors(t *testing.T) {
 	t.Run("property_api_error", func(t *testing.T) {
-		server, client := setupTestServer(t, "/orgs/testorg/properties/values", nil)
-		server.Close() // Close immediately to simulate connection error
+		handlers := map[string]http.HandlerFunc{
+			"/orgs/testorg/properties/values": func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+			},
+		}
+		server, client := setupMultiHandlerTestServer(t, handlers)
+		defer server.Close()
 
 		_, err := client.ListRepositoriesByProperty("testorg", "team", "backend")
 		if err == nil {
@@ -229,7 +245,12 @@ func TestListRepositoriesByPropertyErrors(t *testing.T) {
 	})
 
 	t.Run("missing_org", func(t *testing.T) {
-		server, client := setupTestServer(t, "/orgs/testorg/properties/values", nil)
+		handlers := map[string]http.HandlerFunc{
+			"/orgs/testorg/properties/values": func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			},
+		}
+		server, client := setupMultiHandlerTestServer(t, handlers)
 		defer server.Close()
 
 		_, err := client.ListRepositoriesByProperty("", "team", "backend")
@@ -241,7 +262,12 @@ func TestListRepositoriesByPropertyErrors(t *testing.T) {
 	})
 
 	t.Run("missing_property_name", func(t *testing.T) {
-		server, client := setupTestServer(t, "/orgs/testorg/properties/values", nil)
+		handlers := map[string]http.HandlerFunc{
+			"/orgs/testorg/properties/values": func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			},
+		}
+		server, client := setupMultiHandlerTestServer(t, handlers)
 		defer server.Close()
 
 		_, err := client.ListRepositoriesByProperty("testorg", "", "backend")
@@ -253,7 +279,12 @@ func TestListRepositoriesByPropertyErrors(t *testing.T) {
 	})
 
 	t.Run("missing_property_value", func(t *testing.T) {
-		server, client := setupTestServer(t, "/orgs/testorg/properties/values", nil)
+		handlers := map[string]http.HandlerFunc{
+			"/orgs/testorg/properties/values": func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			},
+		}
+		server, client := setupMultiHandlerTestServer(t, handlers)
 		defer server.Close()
 
 		_, err := client.ListRepositoriesByProperty("testorg", "team", "")
@@ -277,7 +308,16 @@ func TestListRepositoriesByPropertyErrors(t *testing.T) {
 			HasNextPage:  false,
 		}
 
-		server, client := setupTestServer(t, "/orgs/testorg/properties/values", propertyResponse)
+		handlers := map[string]http.HandlerFunc{
+			"/orgs/testorg/properties/values": func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(propertyResponse)
+			},
+			"/repos/testorg/": func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusInternalServerError)
+			},
+		}
+		server, client := setupMultiHandlerTestServer(t, handlers)
 		defer server.Close()
 
 		_, err := client.ListRepositoriesByProperty("testorg", "team", "backend")
@@ -286,3 +326,5 @@ func TestListRepositoriesByPropertyErrors(t *testing.T) {
 		}
 	})
 }
+
+// (No code should follow this comment. All test functions are now properly closed.)
