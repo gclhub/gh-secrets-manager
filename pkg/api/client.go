@@ -341,17 +341,17 @@ func (c *Client) CreateOrUpdateOrgSecret(org string, secret *github.EncryptedSec
 		EncryptedValue: encryptedSecret.EncryptedValue,
 		KeyID:          encryptedSecret.KeyID,
 	}
-	
+
 	httpReq, err := c.github.NewRequest("PUT", url, req)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	_, err = c.github.Do(c.ctx, httpReq, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create/update organization secret: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -380,17 +380,17 @@ func (c *Client) CreateOrUpdateRepoSecret(owner, repo string, secret *github.Enc
 		EncryptedValue: encryptedSecret.EncryptedValue,
 		KeyID:          encryptedSecret.KeyID,
 	}
-	
+
 	httpReq, err := c.github.NewRequest("PUT", url, req)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	_, err = c.github.Do(c.ctx, httpReq, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create/update repository secret: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -406,12 +406,12 @@ func (c *Client) DeleteOrgSecret(org, secretName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	_, err = c.github.Do(c.ctx, req, nil)
 	if err != nil {
 		return fmt.Errorf("failed to delete organization secret: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -427,12 +427,12 @@ func (c *Client) DeleteRepoSecret(owner, repo, secretName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	_, err = c.github.Do(c.ctx, req, nil)
 	if err != nil {
 		return fmt.Errorf("failed to delete repository secret: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -618,7 +618,7 @@ func (c *Client) CreateOrUpdateOrgDependabotSecret(org string, secret *github.En
 		EncryptedValue: encryptedSecret.EncryptedValue,
 		KeyID:          encryptedSecret.KeyID,
 	}
-	
+
 	httpReq, err := c.github.NewRequest("PUT", url, req)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)

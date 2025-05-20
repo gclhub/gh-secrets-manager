@@ -19,17 +19,17 @@ func main() {
 		verbose        = pflag.BoolP("verbose", "v", false, "Enable verbose logging")
 		help           = pflag.BoolP("help", "h", false, "Show help message")
 	)
-	
+
 	// Add support for --flag syntax
 	pflag.CommandLine.SetNormalizeFunc(pflag.CommandLine.GetNormalizeFunc())
 	pflag.Parse()
-	
+
 	// Handle help flag manually to avoid "pflag: help requested" message
 	if *help {
 		pflag.Usage()
 		os.Exit(0)
 	}
-	
+
 	// Set verbosity level
 	auth.Verbose = *verbose
 
