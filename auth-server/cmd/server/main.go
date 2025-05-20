@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,14 +9,25 @@ import (
 	"strconv"
 
 	"github.com/gclhub/gh-secrets-manager/auth-server/pkg/auth"
+	"github.com/spf13/pflag"
 )
 
 func main() {
 	var (
-		port           = flag.Int("port", 8080, "Port to listen on")
-		privateKeyPath = flag.String("private-key-path", "", "Path to GitHub App private key PEM file")
+		port           = pflag.Int("port", 8080, "Port to listen on")
+		privateKeyPath = pflag.String("private-key-path", "", "Path to GitHub App private key PEM file")
+		help           = pflag.BoolP("help", "h", false, "Show help message")
 	)
-	flag.Parse()
+
+	// Add support for --flag syntax
+	pflag.CommandLine.SetNormalizeFunc(pflag.CommandLine.GetNormalizeFunc())
+	pflag.Parse()
+
+	// Handle help flag manually to avoid "pflag: help requested" message
+	if *help {
+		pflag.Usage()
+		os.Exit(0)
+	}
 
 	if *privateKeyPath == "" {
 		log.Fatal("--private-key-path is required")
