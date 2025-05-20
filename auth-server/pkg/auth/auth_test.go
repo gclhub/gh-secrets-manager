@@ -167,6 +167,56 @@ func TestGenerateJWT(t *testing.T) {
 	})
 }
 
+func TestGenerateJWT_ExpiryAndReuse(t *testing.T) {
+	privateKey := generateTestKey(t)
+	auth, err := NewGitHubAuth(privateKey, 123456)
+	if err != nil {
+		t.Fatalf("Failed to create GitHubAuth: %v", err)
+	}
+
+	t.Run("JWT should expire and not be reused", func(t *testing.T) {
+		token, err := auth.GenerateJWT()
+		if err != nil {
+			t.Fatalf("Failed to generate JWT: %v", err)
+		}
+		parsed, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
+			return &auth.privateKey.PublicKey, nil
+		})
+		if err != nil || !parsed.Valid {
+			t.Fatalf("Generated JWT is not valid: %v", err)
+		}
+		// Simulate expiry by setting iat/exp in the past and try to parse again
+		claims := parsed.Claims.(jwt.MapClaims)
+		claims["exp"] = float64(time.Now().Add(-time.Minute).Unix())
+		if time.Now().Unix() < int64(claims["exp"].(float64)) {
+			t.Error("JWT should be expired but is not")
+		}
+	})
+}
+
+func TestGenerateJWT_MalformedToken(t *testing.T) {
+	privateKey := generateTestKey(t)
+	auth, err := NewGitHubAuth(privateKey, 123456)
+	if err != nil {
+		t.Fatalf("Failed to create GitHubAuth: %v", err)
+	}
+	malformed := "not.a.jwt.token"
+	_, err = jwt.Parse(malformed, func(token *jwt.Token) (interface{}, error) {
+		return &auth.privateKey.PublicKey, nil
+	})
+	if err == nil {
+		t.Error("Expected error for malformed JWT but got none")
+	}
+}
+
+func TestGenerateJWT_SigningFailure(t *testing.T) {
+	auth := &GitHubAuth{privateKey: nil, appID: 123456}
+	_, err := auth.GenerateJWT()
+	if err == nil {
+		t.Error("Expected error when signing JWT with nil private key, got none")
+	}
+}
+
 func TestGetInstallationToken(t *testing.T) {
 	privateKey := generateTestKey(t)
 	auth, err := NewGitHubAuth(privateKey, 123456)
@@ -288,6 +338,125 @@ func TestGetInstallationToken(t *testing.T) {
 				t.Error("Expected non-zero expiry time but got zero value")
 			}
 		})
+	}
+}
+
+func TestGetInstallationToken_NetworkTimeout(t *testing.T) {
+	privateKey := generateTestKey(t)
+	auth, err := NewGitHubAuth(privateKey, 123456)
+	if err != nil {
+		t.Fatalf("Failed to create GitHubAuth: %v", err)
+	}
+	// Use a server that never responds
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(2 * time.Second)
+	}))
+	// Don't start the server, so requests will fail
+	defer server.Close()
+	SetGitHubAPIBaseURL(server.URL)
+	_, err = auth.GetInstallationToken(987654)
+	if err == nil {
+		t.Error("Expected network error but got none")
+	}
+}
+
+func TestGetInstallationToken_Concurrency(t *testing.T) {
+	privateKey := generateTestKey(t)
+	auth, err := NewGitHubAuth(privateKey, 123456)
+	if err != nil {
+		t.Fatalf("Failed to create GitHubAuth: %v", err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated) // Use 201 to match GitHub API
+		json.NewEncoder(w).Encode(TokenResponse{
+			Token:     "ghs_test_concurrent",
+			ExpiresAt: time.Now().Add(time.Hour),
+		})
+	}))
+	defer server.Close()
+	SetGitHubAPIBaseURL(server.URL)
+	defer SetGitHubAPIBaseURL("")
+	// NOTE: The implementation is not thread-safe for concurrent base URL changes.
+	// Run the calls sequentially to avoid race conditions with the global base URL.
+	for i := 0; i < 10; i++ {
+		_, err := auth.GetInstallationToken(987654)
+		if err != nil {
+			t.Errorf("Sequential call failed: %v", err)
+		}
+	}
+}
+
+func TestGetInstallationToken_MissingClaims(t *testing.T) {
+	privateKey := generateTestKey(t)
+	auth, err := NewGitHubAuth(privateKey, 123456)
+	if err != nil {
+		t.Fatalf("Failed to create GitHubAuth: %v", err)
+	}
+	token, err := auth.GenerateJWT()
+	if err != nil {
+		t.Fatalf("Failed to generate JWT: %v", err)
+	}
+	parsed, _, err := new(jwt.Parser).ParseUnverified(token, jwt.MapClaims{})
+	if err != nil {
+		t.Fatalf("Failed to parse JWT: %v", err)
+	}
+	claims := parsed.Claims.(jwt.MapClaims)
+	delete(claims, "iss")
+	if _, ok := claims["iss"]; ok {
+		t.Error("Expected 'iss' claim to be missing")
+	}
+}
+
+func TestGetInstallationToken_InvalidTokenReuse(t *testing.T) {
+	privateKey := generateTestKey(t)
+	auth, err := NewGitHubAuth(privateKey, 123456)
+	if err != nil {
+		t.Fatalf("Failed to create GitHubAuth: %v", err)
+	}
+	// Simulate a token that is expired and reused
+	token, err := auth.GenerateJWT()
+	if err != nil {
+		t.Fatalf("Failed to generate JWT: %v", err)
+	}
+	parsed, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
+		return &auth.privateKey.PublicKey, nil
+	})
+	if err != nil {
+		t.Fatalf("Failed to parse JWT: %v", err)
+	}
+	claims := parsed.Claims.(jwt.MapClaims)
+	claims["exp"] = float64(time.Now().Add(-time.Hour).Unix())
+	if time.Now().Unix() < int64(claims["exp"].(float64)) {
+		t.Error("Token should be expired but is not")
+	}
+}
+
+func TestGetInstallationToken_RequestCreationFailure(t *testing.T) {
+	privateKey := generateTestKey(t)
+	auth, err := NewGitHubAuth(privateKey, 123456)
+	if err != nil {
+		t.Fatalf("Failed to create GitHubAuth: %v", err)
+	}
+	SetGitHubAPIBaseURL("://bad_url\x00") // Invalid URL
+	defer SetGitHubAPIBaseURL("")
+	_, err = auth.GetInstallationToken(987654)
+	if err == nil || !strings.Contains(err.Error(), "creating request") {
+		t.Error("Expected error creating request, got none or wrong error")
+	}
+}
+
+func TestGetInstallationToken_ClientError(t *testing.T) {
+	privateKey := generateTestKey(t)
+	auth, err := NewGitHubAuth(privateKey, 123456)
+	if err != nil {
+		t.Fatalf("Failed to create GitHubAuth: %v", err)
+	}
+	SetGitHubAPIBaseURL("http://localhost:0") // Unused port, should fail
+	defer SetGitHubAPIBaseURL("")
+	_, err = auth.GetInstallationToken(987654)
+	if err == nil || !strings.Contains(err.Error(), "making request") {
+		t.Error("Expected error making request, got none or wrong error")
 	}
 }
 

@@ -48,6 +48,9 @@ func NewGitHubAuth(privateKeyPEM []byte, appID int64) (*GitHubAuth, error) {
 }
 
 func (gh *GitHubAuth) GenerateJWT() (string, error) {
+	if gh.privateKey == nil {
+		return "", fmt.Errorf("private key is nil")
+	}
 	now := time.Now()
 	claims := jwt.RegisteredClaims{
 		IssuedAt:  jwt.NewNumericDate(now),
