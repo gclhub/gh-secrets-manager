@@ -14,6 +14,8 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+var Verbose = false
+
 type GitHubAuth struct {
 	privateKey *rsa.PrivateKey
 	appID      int64
@@ -25,21 +27,31 @@ type TokenResponse struct {
 }
 
 func NewGitHubAuth(privateKeyPEM []byte, appID int64) (*GitHubAuth, error) {
-	log.Printf("Initializing GitHub auth for app-id=%d", appID)
+	if Verbose {
+		log.Printf("Initializing GitHub auth for app-id=%d", appID)
+	}
 
 	block, _ := pem.Decode(privateKeyPEM)
 	if block == nil {
-		log.Printf("Failed to decode PEM block for app-id=%d", appID)
+		if Verbose {
+			log.Printf("Failed to decode PEM block for app-id=%d", appID)
+		}
 		return nil, fmt.Errorf("failed to decode PEM block")
 	}
-	log.Printf("Successfully decoded PEM block for app-id=%d", appID)
+	if Verbose {
+		log.Printf("Successfully decoded PEM block for app-id=%d", appID)
+	}
 
 	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 	if err != nil {
-		log.Printf("Failed to parse private key for app-id=%d: %v", appID, err)
+		if Verbose {
+			log.Printf("Failed to parse private key for app-id=%d: %v", appID, err)
+		}
 		return nil, fmt.Errorf("failed to parse private key: %w", err)
 	}
-	log.Printf("Successfully parsed private key for app-id=%d", appID)
+	if Verbose {
+		log.Printf("Successfully parsed private key for app-id=%d", appID)
+	}
 
 	return &GitHubAuth{
 		privateKey: privateKey,
@@ -59,15 +71,21 @@ func (gh *GitHubAuth) GenerateJWT() (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
-	log.Printf("Generating JWT for app-id=%d, expires=%s", gh.appID, claims.ExpiresAt.Time)
+	if Verbose {
+		log.Printf("Generating JWT for app-id=%d, expires=%s", gh.appID, claims.ExpiresAt.Time)
+	}
 
 	signedToken, err := token.SignedString(gh.privateKey)
 	if err != nil {
-		log.Printf("Failed to sign JWT for app-id=%d: %v", gh.appID, err)
+		if Verbose {
+			log.Printf("Failed to sign JWT for app-id=%d: %v", gh.appID, err)
+		}
 		return "", fmt.Errorf("signing token: %w", err)
 	}
 
-	log.Printf("Successfully generated JWT for app-id=%d", gh.appID)
+	if Verbose {
+		log.Printf("Successfully generated JWT for app-id=%d", gh.appID)
+	}
 	return signedToken, nil
 }
 
@@ -78,11 +96,15 @@ func (gh *GitHubAuth) GetInstallationToken(installationID int64) (*TokenResponse
 	}
 
 	url := fmt.Sprintf("%s/app/installations/%d/access_tokens", GetGitHubAPIBaseURL(), installationID)
-	log.Printf("Requesting installation token from GitHub API: %s", url)
+	if Verbose {
+		log.Printf("Requesting installation token from GitHub API: %s", url)
+	}
 
 	req, err := http.NewRequest(http.MethodPost, url, nil)
 	if err != nil {
-		log.Printf("Failed to create GitHub API request: %v", err)
+		if Verbose {
+			log.Printf("Failed to create GitHub API request: %v", err)
+		}
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
 
@@ -93,19 +115,25 @@ func (gh *GitHubAuth) GetInstallationToken(installationID int64) (*TokenResponse
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("Failed to make GitHub API request: %v", err)
+		if Verbose {
+			log.Printf("Failed to make GitHub API request: %v", err)
+		}
 		return nil, fmt.Errorf("making request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Printf("Failed to read GitHub API response: %v", err)
+		if Verbose {
+			log.Printf("Failed to read GitHub API response: %v", err)
+		}
 		return nil, fmt.Errorf("reading response: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusCreated {
-		log.Printf("GitHub API error: status=%d body=%s", resp.StatusCode, string(body))
+		if Verbose {
+			log.Printf("GitHub API error: status=%d body=%s", resp.StatusCode, string(body))
+		}
 		return nil, fmt.Errorf("GitHub API error: %d - %s", resp.StatusCode, string(body))
 	}
 
@@ -114,17 +142,23 @@ func (gh *GitHubAuth) GetInstallationToken(installationID int64) (*TokenResponse
 		ExpiresAt time.Time `json:"expires_at"`
 	}
 	if err := json.Unmarshal(body, &tokenResp); err != nil {
-		log.Printf("Failed to parse GitHub API response: %v", err)
+		if Verbose {
+			log.Printf("Failed to parse GitHub API response: %v", err)
+		}
 		return nil, fmt.Errorf("decoding response: %w", err)
 	}
 
 	// Validate required fields
 	if tokenResp.Token == "" || tokenResp.ExpiresAt.IsZero() {
-		log.Printf("Invalid token response: missing required fields")
+		if Verbose {
+			log.Printf("Invalid token response: missing required fields")
+		}
 		return nil, fmt.Errorf("invalid token response: missing required fields")
 	}
 
-	log.Printf("Successfully obtained installation token from GitHub API, expires=%s", tokenResp.ExpiresAt)
+	if Verbose {
+		log.Printf("Successfully obtained installation token from GitHub API, expires=%s", tokenResp.ExpiresAt)
+	}
 	return &TokenResponse{
 		Token:     tokenResp.Token,
 		ExpiresAt: tokenResp.ExpiresAt,

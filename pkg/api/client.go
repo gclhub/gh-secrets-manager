@@ -18,6 +18,9 @@ import (
 	"golang.org/x/crypto/nacl/box"
 )
 
+// Verbose controls the logging verbosity across the API package
+var Verbose bool
+
 type AuthMethod int
 
 const (
@@ -47,16 +50,22 @@ type Client struct {
 
 func NewClient() (*Client, error) {
 	// Try to load GitHub App config first
-	log.Printf("Loading configuration...")
+	if Verbose {
+		log.Printf("Loading configuration...")
+	}
 	cfg, err := config.Load()
 	if err != nil {
-		log.Printf("Failed to load config: %v, falling back to PAT auth", err)
+		if Verbose {
+			log.Printf("Failed to load config: %v, falling back to PAT auth", err)
+		}
 		return NewClientWithOptions(&ClientOptions{AuthMethod: AuthMethodPAT})
 	}
 
 	// If GitHub App is configured, use it as default
 	if cfg.IsGitHubAppConfigured() {
-		log.Printf("Using GitHub App authentication (app-id=%d, installation-id=%d)", cfg.AppID, cfg.InstallationID)
+		if Verbose {
+			log.Printf("Using GitHub App authentication (app-id=%d, installation-id=%d)", cfg.AppID, cfg.InstallationID)
+		}
 		return NewClientWithOptions(&ClientOptions{
 			AuthMethod:     AuthMethodGitHubApp,
 			AppID:          cfg.AppID,
@@ -66,24 +75,32 @@ func NewClient() (*Client, error) {
 	}
 
 	// Only fall back to PAT if GitHub App is not configured
-	log.Printf("GitHub App configuration not found, falling back to PAT authentication")
+	if Verbose {
+		log.Printf("GitHub App configuration not found, falling back to PAT authentication")
+	}
 	return NewClientWithOptions(&ClientOptions{AuthMethod: AuthMethodPAT})
 }
 
 func NewClientWithOptions(opts *ClientOptions) (*Client, error) {
 	if opts == nil {
-		log.Printf("No options provided, using default PAT auth")
+		if Verbose {
+			log.Printf("No options provided, using default PAT auth")
+		}
 		return newPATClient()
 	}
 
 	switch opts.AuthMethod {
 	case AuthMethodPAT:
-		log.Printf("Using PAT authentication")
+		if Verbose {
+			log.Printf("Using PAT authentication")
+		}
 		return newPATClient()
 
 	case AuthMethodGitHubApp:
-		log.Printf("Initializing GitHub App client (auth-server=%s, app-id=%d, installation-id=%d)",
-			opts.AuthServer, opts.AppID, opts.InstallationID)
+		if Verbose {
+			log.Printf("Initializing GitHub App client (auth-server=%s, app-id=%d, installation-id=%d)",
+				opts.AuthServer, opts.AppID, opts.InstallationID)
+		}
 		client := &Client{
 			ctx:    context.Background(),
 			github: github.NewClient(&http.Client{}),
@@ -148,18 +165,24 @@ func newPATClient() (*Client, error) {
 
 func (c *Client) refreshToken() error {
 	if c.opts.AuthServer == "" {
-		log.Printf("No auth server URL provided")
+		if Verbose {
+			log.Printf("No auth server URL provided")
+		}
 		return fmt.Errorf("auth server URL is required")
 	}
 
 	// Clean up auth server URL by trimming trailing slash
 	authServer := strings.TrimRight(c.opts.AuthServer, "/")
 	tokenURL := fmt.Sprintf("%s/token", authServer)
-	log.Printf("Requesting token from auth server: %s", tokenURL)
+	if Verbose {
+		log.Printf("Requesting token from auth server: %s", tokenURL)
+	}
 
 	req, err := http.NewRequest("POST", tokenURL, nil)
 	if err != nil {
-		log.Printf("Failed to create auth request: %v", err)
+		if Verbose {
+			log.Printf("Failed to create auth request: %v", err)
+		}
 		return fmt.Errorf("failed to create auth request: %w", err)
 	}
 
@@ -168,28 +191,40 @@ func (c *Client) refreshToken() error {
 	q.Add("installation-id", fmt.Sprintf("%d", c.opts.InstallationID))
 	req.URL.RawQuery = q.Encode()
 
-	log.Printf("Making request to auth server with URL: %s", req.URL.String())
+	if Verbose {
+		log.Printf("Making request to auth server with URL: %s", req.URL.String())
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Printf("Failed to get token from auth server: %v", err)
+		if Verbose {
+			log.Printf("Failed to get token from auth server: %v", err)
+		}
 		return fmt.Errorf("failed to get token from auth server: %w", err)
 	}
 	defer resp.Body.Close()
 
-	log.Printf("Auth server response status: %d", resp.StatusCode)
+	if Verbose {
+		log.Printf("Auth server response status: %d", resp.StatusCode)
+	}
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		log.Printf("Auth server error response: %s", string(bodyBytes))
+		if Verbose {
+			log.Printf("Auth server error response: %s", string(bodyBytes))
+		}
 		return fmt.Errorf("auth server returned status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	var authResp authResponse
 	if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
-		log.Printf("Failed to decode auth response: %v", err)
+		if Verbose {
+			log.Printf("Failed to decode auth response: %v", err)
+		}
 		return fmt.Errorf("failed to decode auth response: %w", err)
 	}
 
-	log.Printf("Successfully obtained new token, expires at: %s", authResp.ExpiresAt)
+	if Verbose {
+		log.Printf("Successfully obtained new token, expires at: %s", authResp.ExpiresAt)
+	}
 	c.authToken = authResp.Token
 	c.expiresAt = authResp.ExpiresAt
 
@@ -224,12 +259,18 @@ func (c *Client) ensureValidToken() error {
 
 	// Refresh token if it's expired or will expire in the next minute
 	if time.Now().Add(time.Minute).After(c.expiresAt) {
-		log.Printf("Token expired or will expire soon (expires at: %s), refreshing", c.expiresAt)
+		if Verbose {
+			log.Printf("Token expired or will expire soon (expires at: %s), refreshing", c.expiresAt)
+		}
 		if err := c.refreshToken(); err != nil {
-			log.Printf("Failed to refresh token: %v", err)
+			if Verbose {
+				log.Printf("Failed to refresh token: %v", err)
+			}
 			return fmt.Errorf("failed to refresh token: %w", err)
 		}
-		log.Printf("Successfully refreshed token, new expiry: %s", c.expiresAt)
+		if Verbose {
+			log.Printf("Successfully refreshed token, new expiry: %s", c.expiresAt)
+		}
 	}
 
 	return nil

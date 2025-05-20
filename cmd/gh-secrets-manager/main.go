@@ -20,15 +20,24 @@ func main() {
 }
 
 func newRootCmd() *cobra.Command {
+	var verbose bool
+
 	cmd := &cobra.Command{
 		Use:     "secrets-manager",
 		Short:   "GitHub CLI extension for managing GitHub Actions secrets and variables",
 		Long:    `A GitHub CLI extension for managing GitHub Actions secrets and variables, and Dependabot secrets at both organization and repository levels.`,
 		Version: fmt.Sprintf("%s (%s)", version.Version, version.CommitHash),
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			// Set the API verbosity based on the flag
+			api.Verbose = verbose
+		},
 		Run: func(cmd *cobra.Command, args []string) {
 			cmd.Help()
 		},
 	}
+
+	// Add verbose flag to all commands
+	cmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose logging")
 
 	// Set custom usage template to ensure gh prefix appears everywhere
 	cmd.SetUsageTemplate(`Usage:
