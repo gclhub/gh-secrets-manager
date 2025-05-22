@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+
+	"github.com/google/go-github/v45/github"
 )
 
 func TestListRepositoriesByProperty(t *testing.T) {
@@ -53,32 +55,9 @@ func TestListRepositoriesByProperty(t *testing.T) {
 	httpClient := newTestClient(baseURL)
 	
 	client := &Client{
-		github: nil, // We'll mock this
+		github: github.NewClient(httpClient),
 		ctx:    context.Background(),
 		opts:   &ClientOptions{AuthMethod: AuthMethodPAT},
-	}
-	
-	// Mock the HTTP request so we don't need to use the go-github client directly
-	client.ListRepositoriesByProperty = func(org, propName, propValue string) ([]*Repository, error) {
-		if org == "" || propName == "" || propValue == "" {
-			return nil, ErrInvalidArguments
-		}
-		
-		repo1 := &Repository{
-			Name: stringPtr("repo1"),
-			Owner: &RepositoryOwner{
-				Login: stringPtr("testorg"),
-			},
-		}
-		
-		repo2 := &Repository{
-			Name: stringPtr("repo2"),
-			Owner: &RepositoryOwner{
-				Login: stringPtr("testorg"),
-			},
-		}
-		
-		return []*Repository{repo1, repo2}, nil
 	}
 	
 	// Test listing repositories by property
@@ -119,13 +98,6 @@ func TestListRepositoriesByProperty_Error(t *testing.T) {
 		ctx: context.Background(),
 	}
 	
-	client.ListRepositoriesByProperty = func(org, propName, propValue string) ([]*Repository, error) {
-		if org == "" || propName == "" || propValue == "" {
-			return nil, ErrInvalidArguments
-		}
-		return nil, nil
-	}
-	
 	// Test with empty org
 	_, err := client.ListRepositoriesByProperty("", "team", "backend")
 	if err == nil {
@@ -143,9 +115,25 @@ func TestListRepositoriesByProperty_Error(t *testing.T) {
 	if err == nil {
 		t.Error("ListRepositoriesByProperty with empty property value should return error")
 	}
-}
-
-// Helper function to create string pointers
-func stringPtr(s string) *string {
-	return &s
+	
+	// Test with server error
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Internal Server Error"))
+	}))
+	defer server.Close()
+	
+	baseURL, _ := url.Parse(server.URL + "/")
+	httpClient := newTestClient(baseURL)
+	
+	client = &Client{
+		github: github.NewClient(httpClient),
+		ctx:    context.Background(),
+		opts:   &ClientOptions{AuthMethod: AuthMethodPAT},
+	}
+	
+	_, err = client.ListRepositoriesByProperty("testorg", "team", "backend")
+	if err == nil {
+		t.Error("ListRepositoriesByProperty with server error should return error")
+	}
 }
