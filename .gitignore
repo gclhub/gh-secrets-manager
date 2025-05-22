@@ -11,7 +11,14 @@ bin/
 
 # Output of the go coverage tool
 *.out
+*.cover
 coverage.html
+coverage.txt
+coverage.json
+cover.html
+cover.out
+.coverage
+coverage/
 
 # Dependency directories (remove the comment below to include it)
 vendor/
