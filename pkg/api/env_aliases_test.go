@@ -36,7 +36,7 @@ func TestEnvironmentAliases(t *testing.T) {
 	}
 }
 
-func TestGetEnvironmentSecret(t *testing.T) {
+func TestGetEnvironmentSecretNotFound(t *testing.T) {
 	// Setup test server with handler for GetEnvironmentSecret
 	server, client := setupCRUDTestServer()
 	defer server.Close()

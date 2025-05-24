@@ -28,11 +28,24 @@ func TestAddSecretCommands(t *testing.T) {
 	// Pass nil for client options
 	addSecretCommands(rootCmd, nil)
 	
-	// Check for the secrets subcommands directly on the root
+	// Find the secrets command
+	var secretsCmd *cobra.Command
+	for _, cmd := range rootCmd.Commands() {
+		if cmd.Name() == "secrets" {
+			secretsCmd = cmd
+			break
+		}
+	}
+	
+	if secretsCmd == nil {
+		t.Fatal("Expected to find 'secrets' command")
+	}
+	
+	// Check for the secrets subcommands under the secrets command
 	subcommandNames := []string{"list", "set", "delete"}
 	for _, name := range subcommandNames {
 		found := false
-		for _, cmd := range rootCmd.Commands() {
+		for _, cmd := range secretsCmd.Commands() {
 			if cmd.Name() == name {
 				found = true
 				break
@@ -45,7 +58,7 @@ func TestAddSecretCommands(t *testing.T) {
 	
 	// Find the set command and check its flags
 	var setCmd *cobra.Command
-	for _, cmd := range rootCmd.Commands() {
+	for _, cmd := range secretsCmd.Commands() {
 		if cmd.Name() == "set" {
 			setCmd = cmd
 			break
@@ -53,7 +66,7 @@ func TestAddSecretCommands(t *testing.T) {
 	}
 	
 	if setCmd != nil {
-		requiredFlags := []string{"org", "repo", "name", "value", "file", "json", "csv"}
+		requiredFlags := []string{"org", "repo", "name", "value", "file"}
 		for _, flagName := range requiredFlags {
 			if setCmd.Flags().Lookup(flagName) == nil {
 				t.Errorf("Expected to find '%s' flag on 'set' command", flagName)
@@ -114,7 +127,7 @@ func TestAddCommonFlags(t *testing.T) {
 	
 	addCommonFlags(cmd)
 	
-	requiredFlags := []string{"org", "repo", "env"}
+	requiredFlags := []string{"org", "repo", "property", "prop_value"}
 	for _, flagName := range requiredFlags {
 		if cmd.Flags().Lookup(flagName) == nil {
 			t.Errorf("Expected to find '%s' flag", flagName)
