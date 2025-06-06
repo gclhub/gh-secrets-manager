@@ -16,6 +16,8 @@ func main() {
 	var (
 		port           = pflag.Int("port", 8080, "Port to listen on")
 		privateKeyPath = pflag.String("private-key-path", "", "Path to GitHub App private key PEM file")
+		organization   = pflag.String("organization", "", "GitHub organization name for membership verification")
+		team           = pflag.String("team", "", "GitHub team name for membership verification")
 		verbose        = pflag.BoolP("verbose", "v", false, "Enable verbose logging")
 		help           = pflag.BoolP("help", "h", false, "Show help message")
 	)
@@ -53,6 +55,8 @@ func main() {
 
 	handler := &Handler{
 		privateKeyPEM: privateKeyPEM,
+		organization:  *organization,
+		team:          *team,
 		verbose:       *verbose,
 	}
 
@@ -68,6 +72,8 @@ func main() {
 
 type Handler struct {
 	privateKeyPEM []byte
+	organization  string
+	team          string
 	verbose       bool
 }
 
@@ -103,8 +109,28 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get organization and username from query parameters (optional if not configured on server)
+	orgFromQuery := r.URL.Query().Get("org")
+	username := r.URL.Query().Get("username")
+
+	// Use organization from query parameter if provided, otherwise use server configuration
+	orgToCheck := h.organization
+	if orgFromQuery != "" {
+		orgToCheck = orgFromQuery
+	}
+
+	// If server is configured with organization or org is provided in query, require username
+	if orgToCheck != "" && username == "" {
+		if h.verbose {
+			log.Printf("Username is required for organization verification but not provided from %s", r.RemoteAddr)
+		}
+		http.Error(w, "username query parameter is required for organization verification", http.StatusBadRequest)
+		return
+	}
+
 	if h.verbose {
-		log.Printf("Received token request for app-id=%s installation-id=%s from %s", appID, installationID, r.RemoteAddr)
+		log.Printf("Received token request for app-id=%s installation-id=%s org=%s username=%s from %s", 
+			appID, installationID, orgToCheck, username, r.RemoteAddr)
 	}
 
 	appIDInt, err := strconv.ParseInt(appID, 10, 64)
@@ -145,6 +171,34 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 		}
 		http.Error(w, fmt.Sprintf("Failed to get installation token: %v", err), http.StatusInternalServerError)
 		return
+	}
+
+	// Perform organization membership verification if organization and username are provided
+	if orgToCheck != "" && username != "" {
+		if h.verbose {
+			log.Printf("Verifying organization membership for user %s in organization %s", username, orgToCheck)
+		}
+		
+		isMember, err := ghAuth.VerifyOrganizationMembership(token.Token, username, orgToCheck)
+		if err != nil {
+			if h.verbose {
+				log.Printf("Failed to verify organization membership for user %s in %s: %v", username, orgToCheck, err)
+			}
+			http.Error(w, fmt.Sprintf("Failed to verify organization membership: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		if !isMember {
+			if h.verbose {
+				log.Printf("User %s is not a member of organization %s, denying token request", username, orgToCheck)
+			}
+			http.Error(w, fmt.Sprintf("Access denied: user %s is not a member of organization %s", username, orgToCheck), http.StatusForbidden)
+			return
+		}
+
+		if h.verbose {
+			log.Printf("User %s is a member of organization %s, allowing token request", username, orgToCheck)
+		}
 	}
 
 	if h.verbose {

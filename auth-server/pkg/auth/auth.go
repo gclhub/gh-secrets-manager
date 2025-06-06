@@ -164,3 +164,64 @@ func (gh *GitHubAuth) GetInstallationToken(installationID int64) (*TokenResponse
 		ExpiresAt: tokenResp.ExpiresAt,
 	}, nil
 }
+
+// VerifyOrganizationMembership checks if a user belongs to the specified organization
+func (gh *GitHubAuth) VerifyOrganizationMembership(installationToken, username, organization string) (bool, error) {
+	if username == "" || organization == "" {
+		return false, fmt.Errorf("username and organization are required")
+	}
+
+	url := fmt.Sprintf("%s/orgs/%s/members/%s", GetGitHubAPIBaseURL(), organization, username)
+	if Verbose {
+		log.Printf("Checking organization membership: %s", url)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		if Verbose {
+			log.Printf("Failed to create membership check request: %v", err)
+		}
+		return false, fmt.Errorf("creating request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+installationToken)
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	req.Header.Set("User-Agent", fmt.Sprintf("GitHubApp/%d", gh.appID))
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		if Verbose {
+			log.Printf("Failed to make membership check request: %v", err)
+		}
+		return false, fmt.Errorf("making request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusNoContent:
+		// User is a public member
+		if Verbose {
+			log.Printf("User %s is a public member of organization %s", username, organization)
+		}
+		return true, nil
+	case http.StatusNotFound:
+		// User is not a member or membership is private
+		if Verbose {
+			log.Printf("User %s is not a member of organization %s or membership is private", username, organization)
+		}
+		return false, nil
+	case http.StatusForbidden:
+		// Requester is not an organization member
+		if Verbose {
+			log.Printf("Access forbidden when checking membership for %s in %s", username, organization)
+		}
+		return false, fmt.Errorf("access forbidden: unable to check organization membership")
+	default:
+		body, _ := io.ReadAll(resp.Body)
+		if Verbose {
+			log.Printf("Unexpected response from GitHub API: status=%d body=%s", resp.StatusCode, string(body))
+		}
+		return false, fmt.Errorf("GitHub API error: %d - %s", resp.StatusCode, string(body))
+	}
+}

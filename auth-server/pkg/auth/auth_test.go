@@ -460,6 +460,131 @@ func TestGetInstallationToken_ClientError(t *testing.T) {
 	}
 }
 
+func TestVerifyOrganizationMembership(t *testing.T) {
+	privateKey := generateTestKey(t)
+	auth, err := NewGitHubAuth(privateKey, 123456)
+	if err != nil {
+		t.Fatalf("Failed to create GitHubAuth: %v", err)
+	}
+
+	tests := []struct {
+		name           string
+		installationToken string
+		username       string
+		organization   string
+		mockStatus     int
+		wantMember     bool
+		wantErr        bool
+		errorContains  string
+	}{
+		{
+			name:              "User is a public member",
+			installationToken: "ghs_test_token",
+			username:          "testuser",
+			organization:      "testorg",
+			mockStatus:        http.StatusNoContent,
+			wantMember:        true,
+			wantErr:           false,
+		},
+		{
+			name:              "User is not a member",
+			installationToken: "ghs_test_token",
+			username:          "testuser",
+			organization:      "testorg",
+			mockStatus:        http.StatusNotFound,
+			wantMember:        false,
+			wantErr:           false,
+		},
+		{
+			name:              "Access forbidden",
+			installationToken: "ghs_test_token",
+			username:          "testuser",
+			organization:      "testorg",
+			mockStatus:        http.StatusForbidden,
+			wantMember:        false,
+			wantErr:           true,
+			errorContains:     "access forbidden",
+		},
+		{
+			name:              "Empty username",
+			installationToken: "ghs_test_token",
+			username:          "",
+			organization:      "testorg",
+			mockStatus:        http.StatusNoContent,
+			wantMember:        false,
+			wantErr:           true,
+			errorContains:     "username and organization are required",
+		},
+		{
+			name:              "Empty organization",
+			installationToken: "ghs_test_token",
+			username:          "testuser",
+			organization:      "",
+			mockStatus:        http.StatusNoContent,
+			wantMember:        false,
+			wantErr:           true,
+			errorContains:     "username and organization are required",
+		},
+		{
+			name:              "Server error",
+			installationToken: "ghs_test_token",
+			username:          "testuser",
+			organization:      "testorg",
+			mockStatus:        http.StatusInternalServerError,
+			wantMember:        false,
+			wantErr:           true,
+			errorContains:     "500",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Verify request headers and path
+				if r.Header.Get("Accept") != "application/vnd.github.v3+json" {
+					t.Error("Missing or invalid Accept header")
+				}
+				expectedAuth := "Bearer " + tt.installationToken
+				if r.Header.Get("Authorization") != expectedAuth {
+					t.Errorf("Expected Authorization header %q but got %q", expectedAuth, r.Header.Get("Authorization"))
+				}
+				if r.Header.Get("User-Agent") == "" {
+					t.Error("Missing User-Agent header")
+				}
+				expectedPath := fmt.Sprintf("/orgs/%s/members/%s", tt.organization, tt.username)
+				if tt.username != "" && tt.organization != "" && r.URL.Path != expectedPath {
+					t.Errorf("Expected path %q but got %q", expectedPath, r.URL.Path)
+				}
+
+				w.WriteHeader(tt.mockStatus)
+			}))
+			defer server.Close()
+
+			// Use test server instead of real GitHub API
+			originalURL := GetGitHubAPIBaseURL()
+			SetGitHubAPIBaseURL(server.URL)
+			defer SetGitHubAPIBaseURL(originalURL)
+
+			isMember, err := auth.VerifyOrganizationMembership(tt.installationToken, tt.username, tt.organization)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("Expected error but got none")
+				} else if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
+					t.Errorf("Expected error containing %q but got %v", tt.errorContains, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+			if isMember != tt.wantMember {
+				t.Errorf("Expected membership %v but got %v", tt.wantMember, isMember)
+			}
+		})
+	}
+}
+
 // Helper functions
 func errorStartsWith(err error, prefix string) bool {
 	return err != nil && len(err.Error()) >= len(prefix) && err.Error()[:len(prefix)] == prefix

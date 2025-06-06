@@ -33,6 +33,7 @@ type ClientOptions struct {
 	AppID          int64
 	InstallationID int64
 	AuthServer     string
+	Username       string
 }
 
 type authResponse struct {
@@ -46,6 +47,25 @@ type Client struct {
 	opts      *ClientOptions
 	authToken string
 	expiresAt time.Time
+}
+
+func GetCurrentUsername() (string, error) {
+	// Use gh CLI to get current username
+	client, err := gh.RESTClient(nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create GitHub client: %w", err)
+	}
+
+	var user struct {
+		Login string `json:"login"`
+	}
+	
+	err = client.Get("user", &user)
+	if err != nil {
+		return "", fmt.Errorf("failed to get current user: %w", err)
+	}
+
+	return user.Login, nil
 }
 
 func NewClient() (*Client, error) {
@@ -66,11 +86,22 @@ func NewClient() (*Client, error) {
 		if Verbose {
 			log.Printf("Using GitHub App authentication (app-id=%d, installation-id=%d)", cfg.AppID, cfg.InstallationID)
 		}
+		
+		// Get current username for organization verification if using GitHub App auth
+		username, err := GetCurrentUsername()
+		if err != nil {
+			if Verbose {
+				log.Printf("Warning: Failed to get current username for organization verification: %v", err)
+			}
+			// Continue without username - auth server may not require organization verification
+		}
+		
 		return NewClientWithOptions(&ClientOptions{
 			AuthMethod:     AuthMethodGitHubApp,
 			AppID:          cfg.AppID,
 			InstallationID: cfg.InstallationID,
 			AuthServer:     cfg.AuthServer,
+			Username:       username,
 		})
 	}
 
@@ -98,8 +129,8 @@ func NewClientWithOptions(opts *ClientOptions) (*Client, error) {
 
 	case AuthMethodGitHubApp:
 		if Verbose {
-			log.Printf("Initializing GitHub App client (auth-server=%s, app-id=%d, installation-id=%d)",
-				opts.AuthServer, opts.AppID, opts.InstallationID)
+			log.Printf("Initializing GitHub App client (auth-server=%s, app-id=%d, installation-id=%d, username=%s)",
+				opts.AuthServer, opts.AppID, opts.InstallationID, opts.Username)
 		}
 		client := &Client{
 			ctx:    context.Background(),
@@ -189,6 +220,15 @@ func (c *Client) refreshToken() error {
 	q := req.URL.Query()
 	q.Add("app-id", fmt.Sprintf("%d", c.opts.AppID))
 	q.Add("installation-id", fmt.Sprintf("%d", c.opts.InstallationID))
+	
+	// Add username if provided for organization verification
+	if c.opts.Username != "" {
+		q.Add("username", c.opts.Username)
+		if Verbose {
+			log.Printf("Adding username to auth request: %s", c.opts.Username)
+		}
+	}
+	
 	req.URL.RawQuery = q.Encode()
 
 	if Verbose {
