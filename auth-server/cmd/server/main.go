@@ -16,7 +16,7 @@ func main() {
 	var (
 		port           = pflag.Int("port", 8080, "Port to listen on")
 		privateKeyPath = pflag.String("private-key-path", "", "Path to GitHub App private key PEM file")
-		organization   = pflag.String("organization", "", "GitHub organization name for team membership verification")
+		organization   = pflag.String("organization", "", "GitHub organization name for team membership verification (optional - will be auto-detected from app installation if not provided)")
 		team           = pflag.String("team", "", "GitHub team name for membership verification")
 		verbose        = pflag.BoolP("verbose", "v", false, "Enable verbose logging")
 		help           = pflag.BoolP("help", "h", false, "Show help message")
@@ -41,7 +41,7 @@ func main() {
 
 	// Validate team verification configuration
 	if *team != "" && *organization == "" {
-		log.Fatal("--organization is required when --team is specified for team membership verification")
+		log.Println("Note: --organization not specified but --team is provided. Organization will be auto-detected from GitHub App installation.")
 	}
 
 	log.Println("Starting GitHub App auth server...")
@@ -140,24 +140,6 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 		teamToCheck = teamFromQuery
 	}
 
-	// If server is configured with team or team is provided in query, require organization, team, and username
-	if teamToCheck != "" {
-		if orgToCheck == "" {
-			if h.verbose {
-				log.Printf("Organization is required for team verification but not provided from %s", r.RemoteAddr)
-			}
-			http.Error(w, "organization is required for team verification", http.StatusBadRequest)
-			return
-		}
-		if username == "" {
-			if h.verbose {
-				log.Printf("Username is required for team verification but not provided from %s", r.RemoteAddr)
-			}
-			http.Error(w, "username query parameter is required for team verification", http.StatusBadRequest)
-			return
-		}
-	}
-
 	if h.verbose {
 		log.Printf("Received token request for app-id=%s installation-id=%s org=%s team=%s username=%s from %s", 
 			appID, installationID, orgToCheck, teamToCheck, username, r.RemoteAddr)
@@ -188,6 +170,38 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 		}
 		http.Error(w, fmt.Sprintf("Failed to initialize GitHub auth: %v", err), http.StatusInternalServerError)
 		return
+	}
+
+	// If server is configured with team or team is provided in query, require team and username
+	if teamToCheck != "" {
+		if username == "" {
+			if h.verbose {
+				log.Printf("Username is required for team verification but not provided from %s", r.RemoteAddr)
+			}
+			http.Error(w, "username query parameter is required for team verification", http.StatusBadRequest)
+			return
+		}
+		
+		// Auto-detect organization if not provided
+		if orgToCheck == "" {
+			if h.verbose {
+				log.Printf("Organization not specified, auto-detecting from installation %s", installationID)
+			}
+			
+			installation, err := ghAuth.GetInstallation(instIDInt)
+			if err != nil {
+				if h.verbose {
+					log.Printf("Failed to get installation details for auto-detection: %v", err)
+				}
+				http.Error(w, fmt.Sprintf("Failed to auto-detect organization from installation: %v", err), http.StatusInternalServerError)
+				return
+			}
+			
+			orgToCheck = installation.Account.Login
+			if h.verbose {
+				log.Printf("Auto-detected organization: %s", orgToCheck)
+			}
+		}
 	}
 
 	if h.verbose {

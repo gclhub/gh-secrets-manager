@@ -26,6 +26,14 @@ type TokenResponse struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
+type InstallationResponse struct {
+	ID      int64 `json:"id"`
+	Account struct {
+		Login string `json:"login"`
+		Type  string `json:"type"`
+	} `json:"account"`
+}
+
 func NewGitHubAuth(privateKeyPEM []byte, appID int64) (*GitHubAuth, error) {
 	if Verbose {
 		log.Printf("Initializing GitHub auth for app-id=%d", appID)
@@ -163,6 +171,77 @@ func (gh *GitHubAuth) GetInstallationToken(installationID int64) (*TokenResponse
 		Token:     tokenResp.Token,
 		ExpiresAt: tokenResp.ExpiresAt,
 	}, nil
+}
+
+// GetInstallation retrieves information about a GitHub App installation
+func (gh *GitHubAuth) GetInstallation(installationID int64) (*InstallationResponse, error) {
+	jwt, err := gh.GenerateJWT()
+	if err != nil {
+		return nil, fmt.Errorf("generating JWT: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/app/installations/%d", GetGitHubAPIBaseURL(), installationID)
+	if Verbose {
+		log.Printf("Requesting installation details from GitHub API: %s", url)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		if Verbose {
+			log.Printf("Failed to create GitHub API request: %v", err)
+		}
+		return nil, fmt.Errorf("creating request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+jwt)
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	req.Header.Set("User-Agent", fmt.Sprintf("GitHubApp/%d", gh.appID))
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		if Verbose {
+			log.Printf("Failed to make GitHub API request: %v", err)
+		}
+		return nil, fmt.Errorf("making request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		if Verbose {
+			log.Printf("Failed to read GitHub API response: %v", err)
+		}
+		return nil, fmt.Errorf("reading response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		if Verbose {
+			log.Printf("GitHub API error: status=%d body=%s", resp.StatusCode, string(body))
+		}
+		return nil, fmt.Errorf("GitHub API error: %d - %s", resp.StatusCode, string(body))
+	}
+
+	var installation InstallationResponse
+	if err := json.Unmarshal(body, &installation); err != nil {
+		if Verbose {
+			log.Printf("Failed to parse GitHub API response: %v", err)
+		}
+		return nil, fmt.Errorf("decoding response: %w", err)
+	}
+
+	// Validate required fields
+	if installation.Account.Login == "" {
+		if Verbose {
+			log.Printf("Invalid installation response: missing account login")
+		}
+		return nil, fmt.Errorf("invalid installation response: missing account login")
+	}
+
+	if Verbose {
+		log.Printf("Successfully obtained installation details: org=%s type=%s", installation.Account.Login, installation.Account.Type)
+	}
+	return &installation, nil
 }
 
 // VerifyTeamMembership checks if a user belongs to the specified team within an organization

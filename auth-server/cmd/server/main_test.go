@@ -161,7 +161,7 @@ func TestHandleToken_TeamVerification(t *testing.T) {
 			expectedError:  "username query parameter is required",
 		},
 		{
-			name:       "Missing organization when team verification required",
+			name:       "Auto-detect organization when team verification required",
 			serverOrg:  "",
 			serverTeam: "testteam",
 			queryParams: map[string]string{
@@ -169,8 +169,32 @@ func TestHandleToken_TeamVerification(t *testing.T) {
 				"installation-id": "987654",
 				"username":        "testuser",
 			},
-			expectedStatus: http.StatusBadRequest,
-			expectedError:  "organization is required for team verification",
+			mockGitHubResponses: map[string]func(w http.ResponseWriter, r *http.Request){
+				"/app/installations/987654": func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"id": 987654,
+						"account": map[string]interface{}{
+							"login": "autodetectedorg",
+							"type":  "Organization",
+						},
+					})
+				},
+				"/app/installations/987654/access_tokens": func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusCreated)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"token":      "ghs_test_token",
+						"expires_at": time.Now().Add(time.Hour),
+					})
+				},
+				"/orgs/autodetectedorg/teams/testteam/memberships/testuser": func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"state": "active",
+					})
+				},
+			},
+			expectedStatus: http.StatusOK,
 		},
 		{
 			name:       "Team verification with query parameters",
