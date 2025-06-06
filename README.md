@@ -81,7 +81,16 @@ cd secrets-manager/auth-server
 
 2. Start the server with your GitHub App credentials:
 ```bash
+# Basic auth server (no access control)
 go run cmd/server/main.go --port 8080 --private-key-path /path/to/private-key.pem
+
+# With team membership verification
+go run cmd/server/main.go \
+  --port 8080 \
+  --private-key-path /path/to/private-key.pem \
+  --organization myorg \
+  --team myteam \
+  --verbose
 ```
 
 #### Production Mode
@@ -94,9 +103,18 @@ go build -o bin/auth-server cmd/server/main.go
 
 2. Deploy the server with your configuration:
 ```bash
+# Basic auth server (no access control)
 ./bin/auth-server \
   --port 443 \
   --private-key-path /path/to/private-key.pem
+
+# With team membership verification
+./bin/auth-server \
+  --port 443 \
+  --private-key-path /path/to/private-key.pem \
+  --organization myorg \
+  --team myteam \
+  --verbose
 ```
 
 We recommend:
@@ -104,6 +122,7 @@ We recommend:
 - Using environment variables or a config management system for the private key
 - Implementing additional access controls and rate limiting
 - Monitoring server health and token usage
+- Configuring team membership verification for access control
 
 ### Auth Server Endpoints
 
@@ -117,13 +136,16 @@ Returns 200 OK if the server is running. Useful for load balancer health checks 
 
 #### Token Generation
 ```
-POST /token?app-id=APP_ID&installation-id=INSTALLATION_ID
+POST /token?app-id=APP_ID&installation-id=INSTALLATION_ID&username=USERNAME&org=ORG&team=TEAM
 ```
-Generates a GitHub installation access token.
+Generates a GitHub installation access token. If team verification is configured, the user must be an active member of the specified team.
 
 Parameters:
 - `app-id` (required) - The GitHub App ID
 - `installation-id` (required) - The installation ID for the organization
+- `username` (optional) - GitHub username for team membership verification
+- `org` (optional) - Organization name (overrides server configuration)
+- `team` (optional) - Team name (overrides server configuration)
 
 Response (200 OK):
 ```json
