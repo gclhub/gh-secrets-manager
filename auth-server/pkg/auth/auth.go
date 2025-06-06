@@ -165,21 +165,21 @@ func (gh *GitHubAuth) GetInstallationToken(installationID int64) (*TokenResponse
 	}, nil
 }
 
-// VerifyOrganizationMembership checks if a user belongs to the specified organization
-func (gh *GitHubAuth) VerifyOrganizationMembership(installationToken, username, organization string) (bool, error) {
-	if username == "" || organization == "" {
-		return false, fmt.Errorf("username and organization are required")
+// VerifyTeamMembership checks if a user belongs to the specified team within an organization
+func (gh *GitHubAuth) VerifyTeamMembership(installationToken, username, organization, team string) (bool, error) {
+	if username == "" || organization == "" || team == "" {
+		return false, fmt.Errorf("username, organization, and team are required")
 	}
 
-	url := fmt.Sprintf("%s/orgs/%s/members/%s", GetGitHubAPIBaseURL(), organization, username)
+	url := fmt.Sprintf("%s/orgs/%s/teams/%s/memberships/%s", GetGitHubAPIBaseURL(), organization, team, username)
 	if Verbose {
-		log.Printf("Checking organization membership: %s", url)
+		log.Printf("Checking team membership: %s", url)
 	}
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		if Verbose {
-			log.Printf("Failed to create membership check request: %v", err)
+			log.Printf("Failed to create team membership check request: %v", err)
 		}
 		return false, fmt.Errorf("creating request: %w", err)
 	}
@@ -192,31 +192,51 @@ func (gh *GitHubAuth) VerifyOrganizationMembership(installationToken, username, 
 	resp, err := client.Do(req)
 	if err != nil {
 		if Verbose {
-			log.Printf("Failed to make membership check request: %v", err)
+			log.Printf("Failed to make team membership check request: %v", err)
 		}
 		return false, fmt.Errorf("making request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	switch resp.StatusCode {
-	case http.StatusNoContent:
-		// User is a public member
-		if Verbose {
-			log.Printf("User %s is a public member of organization %s", username, organization)
+	case http.StatusOK:
+		// User is a team member - verify the membership details
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			if Verbose {
+				log.Printf("Failed to read team membership response: %v", err)
+			}
+			return false, fmt.Errorf("reading response: %w", err)
 		}
-		return true, nil
-	case http.StatusNotFound:
-		// User is not a member or membership is private
+		
+		var membership struct {
+			State string `json:"state"`
+		}
+		if err := json.Unmarshal(body, &membership); err != nil {
+			if Verbose {
+				log.Printf("Failed to parse team membership response: %v", err)
+			}
+			return false, fmt.Errorf("parsing response: %w", err)
+		}
+
+		// Check if membership is active
+		isActive := membership.State == "active"
 		if Verbose {
-			log.Printf("User %s is not a member of organization %s or membership is private", username, organization)
+			log.Printf("User %s team membership in %s/%s: state=%s, active=%v", username, organization, team, membership.State, isActive)
+		}
+		return isActive, nil
+	case http.StatusNotFound:
+		// User is not a team member
+		if Verbose {
+			log.Printf("User %s is not a member of team %s in organization %s", username, team, organization)
 		}
 		return false, nil
 	case http.StatusForbidden:
-		// Requester is not an organization member
+		// Requester does not have permission to check team membership
 		if Verbose {
-			log.Printf("Access forbidden when checking membership for %s in %s", username, organization)
+			log.Printf("Access forbidden when checking team membership for %s in %s/%s", username, organization, team)
 		}
-		return false, fmt.Errorf("access forbidden: unable to check organization membership")
+		return false, fmt.Errorf("access forbidden: unable to check team membership")
 	default:
 		body, _ := io.ReadAll(resp.Body)
 		if Verbose {

@@ -16,7 +16,7 @@ func main() {
 	var (
 		port           = pflag.Int("port", 8080, "Port to listen on")
 		privateKeyPath = pflag.String("private-key-path", "", "Path to GitHub App private key PEM file")
-		organization   = pflag.String("organization", "", "GitHub organization name for membership verification")
+		organization   = pflag.String("organization", "", "GitHub organization name for team membership verification")
 		team           = pflag.String("team", "", "GitHub team name for membership verification")
 		verbose        = pflag.BoolP("verbose", "v", false, "Enable verbose logging")
 		help           = pflag.BoolP("help", "h", false, "Show help message")
@@ -39,9 +39,23 @@ func main() {
 		log.Fatal("--private-key-path is required")
 	}
 
+	// Validate team verification configuration
+	if *team != "" && *organization == "" {
+		log.Fatal("--organization is required when --team is specified for team membership verification")
+	}
+
 	log.Println("Starting GitHub App auth server...")
 	if *verbose {
 		log.Printf("Reading private key from: %s", *privateKeyPath)
+	}
+
+	// Log verification configuration
+	if *team != "" && *organization != "" {
+		log.Printf("Team membership verification enabled: organization=%s, team=%s", *organization, *team)
+	} else if *organization != "" {
+		log.Printf("Organization specified but no team - team membership verification disabled: organization=%s", *organization)
+	} else {
+		log.Println("No team membership verification configured")
 	}
 
 	// Read private key file
@@ -109,8 +123,9 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get organization and username from query parameters (optional if not configured on server)
+	// Get organization, team, and username from query parameters (optional if not configured on server)
 	orgFromQuery := r.URL.Query().Get("org")
+	teamFromQuery := r.URL.Query().Get("team")
 	username := r.URL.Query().Get("username")
 
 	// Use organization from query parameter if provided, otherwise use server configuration
@@ -119,18 +134,33 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 		orgToCheck = orgFromQuery
 	}
 
-	// If server is configured with organization or org is provided in query, require username
-	if orgToCheck != "" && username == "" {
-		if h.verbose {
-			log.Printf("Username is required for organization verification but not provided from %s", r.RemoteAddr)
+	// Use team from query parameter if provided, otherwise use server configuration
+	teamToCheck := h.team
+	if teamFromQuery != "" {
+		teamToCheck = teamFromQuery
+	}
+
+	// If server is configured with team or team is provided in query, require organization, team, and username
+	if teamToCheck != "" {
+		if orgToCheck == "" {
+			if h.verbose {
+				log.Printf("Organization is required for team verification but not provided from %s", r.RemoteAddr)
+			}
+			http.Error(w, "organization is required for team verification", http.StatusBadRequest)
+			return
 		}
-		http.Error(w, "username query parameter is required for organization verification", http.StatusBadRequest)
-		return
+		if username == "" {
+			if h.verbose {
+				log.Printf("Username is required for team verification but not provided from %s", r.RemoteAddr)
+			}
+			http.Error(w, "username query parameter is required for team verification", http.StatusBadRequest)
+			return
+		}
 	}
 
 	if h.verbose {
-		log.Printf("Received token request for app-id=%s installation-id=%s org=%s username=%s from %s", 
-			appID, installationID, orgToCheck, username, r.RemoteAddr)
+		log.Printf("Received token request for app-id=%s installation-id=%s org=%s team=%s username=%s from %s", 
+			appID, installationID, orgToCheck, teamToCheck, username, r.RemoteAddr)
 	}
 
 	appIDInt, err := strconv.ParseInt(appID, 10, 64)
@@ -173,31 +203,31 @@ func (h *Handler) handleToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Perform organization membership verification if organization and username are provided
-	if orgToCheck != "" && username != "" {
+	// Perform team membership verification if organization, team, and username are provided
+	if teamToCheck != "" && orgToCheck != "" && username != "" {
 		if h.verbose {
-			log.Printf("Verifying organization membership for user %s in organization %s", username, orgToCheck)
+			log.Printf("Verifying team membership for user %s in team %s of organization %s", username, teamToCheck, orgToCheck)
 		}
 		
-		isMember, err := ghAuth.VerifyOrganizationMembership(token.Token, username, orgToCheck)
+		isMember, err := ghAuth.VerifyTeamMembership(token.Token, username, orgToCheck, teamToCheck)
 		if err != nil {
 			if h.verbose {
-				log.Printf("Failed to verify organization membership for user %s in %s: %v", username, orgToCheck, err)
+				log.Printf("Failed to verify team membership for user %s in %s/%s: %v", username, orgToCheck, teamToCheck, err)
 			}
-			http.Error(w, fmt.Sprintf("Failed to verify organization membership: %v", err), http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("Failed to verify team membership: %v", err), http.StatusInternalServerError)
 			return
 		}
 
 		if !isMember {
 			if h.verbose {
-				log.Printf("User %s is not a member of organization %s, denying token request", username, orgToCheck)
+				log.Printf("User %s is not a member of team %s in organization %s, denying token request", username, teamToCheck, orgToCheck)
 			}
-			http.Error(w, fmt.Sprintf("Access denied: user %s is not a member of organization %s", username, orgToCheck), http.StatusForbidden)
+			http.Error(w, fmt.Sprintf("Access denied: user %s is not a member of team %s in organization %s", username, teamToCheck, orgToCheck), http.StatusForbidden)
 			return
 		}
 
 		if h.verbose {
-			log.Printf("User %s is a member of organization %s, allowing token request", username, orgToCheck)
+			log.Printf("User %s is a member of team %s in organization %s, allowing token request", username, teamToCheck, orgToCheck)
 		}
 	}
 

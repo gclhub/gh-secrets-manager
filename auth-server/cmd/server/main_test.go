@@ -43,18 +43,20 @@ func generateTestHandler(t *testing.T) (*Handler, []byte) {
 	}, privateKey
 }
 
-func TestHandleToken_OrganizationVerification(t *testing.T) {
+func TestHandleToken_TeamVerification(t *testing.T) {
 	tests := []struct {
-		name               string
-		serverOrg          string
-		queryParams        map[string]string
+		name                string
+		serverOrg           string
+		serverTeam          string
+		queryParams         map[string]string
 		mockGitHubResponses map[string]func(w http.ResponseWriter, r *http.Request)
 		expectedStatus      int
 		expectedError       string
 	}{
 		{
-			name:      "No organization verification required",
-			serverOrg: "",
+			name:       "No team verification required",
+			serverOrg:  "",
+			serverTeam: "",
 			queryParams: map[string]string{
 				"app-id":          "123456",
 				"installation-id": "987654",
@@ -71,8 +73,9 @@ func TestHandleToken_OrganizationVerification(t *testing.T) {
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:      "Organization verification successful",
-			serverOrg: "testorg",
+			name:       "Team verification successful",
+			serverOrg:  "testorg",
+			serverTeam: "testteam",
 			queryParams: map[string]string{
 				"app-id":          "123456",
 				"installation-id": "987654",
@@ -86,15 +89,19 @@ func TestHandleToken_OrganizationVerification(t *testing.T) {
 						"expires_at": time.Now().Add(time.Hour),
 					})
 				},
-				"/orgs/testorg/members/testuser": func(w http.ResponseWriter, r *http.Request) {
-					w.WriteHeader(http.StatusNoContent) // User is a member
+				"/orgs/testorg/teams/testteam/memberships/testuser": func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"state": "active",
+					})
 				},
 			},
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:      "Organization verification failed - not a member",
-			serverOrg: "testorg",
+			name:       "Team verification failed - not a member",
+			serverOrg:  "testorg",
+			serverTeam: "testteam",
 			queryParams: map[string]string{
 				"app-id":          "123456",
 				"installation-id": "987654",
@@ -108,16 +115,44 @@ func TestHandleToken_OrganizationVerification(t *testing.T) {
 						"expires_at": time.Now().Add(time.Hour),
 					})
 				},
-				"/orgs/testorg/members/testuser": func(w http.ResponseWriter, r *http.Request) {
-					w.WriteHeader(http.StatusNotFound) // User is not a member
+				"/orgs/testorg/teams/testteam/memberships/testuser": func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusNotFound) // User is not a team member
 				},
 			},
 			expectedStatus: http.StatusForbidden,
-			expectedError:  "not a member of organization",
+			expectedError:  "not a member of team",
 		},
 		{
-			name:      "Missing username when organization verification required",
-			serverOrg: "testorg",
+			name:       "Team verification failed - pending membership",
+			serverOrg:  "testorg",
+			serverTeam: "testteam",
+			queryParams: map[string]string{
+				"app-id":          "123456",
+				"installation-id": "987654",
+				"username":        "testuser",
+			},
+			mockGitHubResponses: map[string]func(w http.ResponseWriter, r *http.Request){
+				"/app/installations/987654/access_tokens": func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusCreated)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"token":      "ghs_test_token",
+						"expires_at": time.Now().Add(time.Hour),
+					})
+				},
+				"/orgs/testorg/teams/testteam/memberships/testuser": func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"state": "pending",
+					})
+				},
+			},
+			expectedStatus: http.StatusForbidden,
+			expectedError:  "not a member of team",
+		},
+		{
+			name:       "Missing username when team verification required",
+			serverOrg:  "testorg",
+			serverTeam: "testteam",
 			queryParams: map[string]string{
 				"app-id":          "123456",
 				"installation-id": "987654",
@@ -125,12 +160,53 @@ func TestHandleToken_OrganizationVerification(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 			expectedError:  "username query parameter is required",
 		},
+		{
+			name:       "Missing organization when team verification required",
+			serverOrg:  "",
+			serverTeam: "testteam",
+			queryParams: map[string]string{
+				"app-id":          "123456",
+				"installation-id": "987654",
+				"username":        "testuser",
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "organization is required for team verification",
+		},
+		{
+			name:       "Team verification with query parameters",
+			serverOrg:  "",
+			serverTeam: "",
+			queryParams: map[string]string{
+				"app-id":          "123456",
+				"installation-id": "987654",
+				"username":        "testuser",
+				"org":             "queryorg",
+				"team":            "queryteam",
+			},
+			mockGitHubResponses: map[string]func(w http.ResponseWriter, r *http.Request){
+				"/app/installations/987654/access_tokens": func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusCreated)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"token":      "ghs_test_token",
+						"expires_at": time.Now().Add(time.Hour),
+					})
+				},
+				"/orgs/queryorg/teams/queryteam/memberships/testuser": func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusOK)
+					json.NewEncoder(w).Encode(map[string]interface{}{
+						"state": "active",
+					})
+				},
+			},
+			expectedStatus: http.StatusOK,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handler, _ := generateTestHandler(t)
 			handler.organization = tt.serverOrg
+			handler.team = tt.serverTeam
 
 			// Create mock GitHub server
 			var githubServer *httptest.Server

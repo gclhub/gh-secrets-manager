@@ -11,6 +11,8 @@ type Config struct {
 	AuthServer     string `json:"auth-server"`
 	AppID          int64  `json:"app-id"`
 	InstallationID int64  `json:"installation-id"`
+	Organization   string `json:"organization,omitempty"`
+	Team           string `json:"team,omitempty"`
 }
 
 // IsGitHubAppConfigured returns true if all required GitHub App settings are configured

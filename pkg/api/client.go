@@ -34,6 +34,8 @@ type ClientOptions struct {
 	InstallationID int64
 	AuthServer     string
 	Username       string
+	Organization   string
+	Team           string
 }
 
 type authResponse struct {
@@ -102,6 +104,8 @@ func NewClient() (*Client, error) {
 			InstallationID: cfg.InstallationID,
 			AuthServer:     cfg.AuthServer,
 			Username:       username,
+			Organization:   cfg.Organization,
+			Team:           cfg.Team,
 		})
 	}
 
@@ -129,8 +133,8 @@ func NewClientWithOptions(opts *ClientOptions) (*Client, error) {
 
 	case AuthMethodGitHubApp:
 		if Verbose {
-			log.Printf("Initializing GitHub App client (auth-server=%s, app-id=%d, installation-id=%d, username=%s)",
-				opts.AuthServer, opts.AppID, opts.InstallationID, opts.Username)
+			log.Printf("Initializing GitHub App client (auth-server=%s, app-id=%d, installation-id=%d, username=%s, org=%s, team=%s)",
+				opts.AuthServer, opts.AppID, opts.InstallationID, opts.Username, opts.Organization, opts.Team)
 		}
 		client := &Client{
 			ctx:    context.Background(),
@@ -221,11 +225,27 @@ func (c *Client) refreshToken() error {
 	q.Add("app-id", fmt.Sprintf("%d", c.opts.AppID))
 	q.Add("installation-id", fmt.Sprintf("%d", c.opts.InstallationID))
 	
-	// Add username if provided for organization verification
+	// Add username if provided for team verification
 	if c.opts.Username != "" {
 		q.Add("username", c.opts.Username)
 		if Verbose {
 			log.Printf("Adding username to auth request: %s", c.opts.Username)
+		}
+	}
+	
+	// Add organization if provided for team verification
+	if c.opts.Organization != "" {
+		q.Add("org", c.opts.Organization)
+		if Verbose {
+			log.Printf("Adding organization to auth request: %s", c.opts.Organization)
+		}
+	}
+	
+	// Add team if provided for team verification
+	if c.opts.Team != "" {
+		q.Add("team", c.opts.Team)
+		if Verbose {
+			log.Printf("Adding team to auth request: %s", c.opts.Team)
 		}
 	}
 	

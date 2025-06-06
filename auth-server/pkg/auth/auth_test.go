@@ -460,7 +460,7 @@ func TestGetInstallationToken_ClientError(t *testing.T) {
 	}
 }
 
-func TestVerifyOrganizationMembership(t *testing.T) {
+func TestVerifyTeamMembership(t *testing.T) {
 	privateKey := generateTestKey(t)
 	auth, err := NewGitHubAuth(privateKey, 123456)
 	if err != nil {
@@ -468,29 +468,49 @@ func TestVerifyOrganizationMembership(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
+		name              string
 		installationToken string
-		username       string
-		organization   string
-		mockStatus     int
-		wantMember     bool
-		wantErr        bool
-		errorContains  string
+		username          string
+		organization      string
+		team              string
+		mockStatus        int
+		mockResponse      interface{}
+		wantMember        bool
+		wantErr           bool
+		errorContains     string
 	}{
 		{
-			name:              "User is a public member",
+			name:              "User is an active team member",
 			installationToken: "ghs_test_token",
 			username:          "testuser",
 			organization:      "testorg",
-			mockStatus:        http.StatusNoContent,
-			wantMember:        true,
-			wantErr:           false,
+			team:              "testteam",
+			mockStatus:        http.StatusOK,
+			mockResponse: map[string]interface{}{
+				"state": "active",
+			},
+			wantMember: true,
+			wantErr:    false,
 		},
 		{
-			name:              "User is not a member",
+			name:              "User is a pending team member",
 			installationToken: "ghs_test_token",
 			username:          "testuser",
 			organization:      "testorg",
+			team:              "testteam",
+			mockStatus:        http.StatusOK,
+			mockResponse: map[string]interface{}{
+				"state": "pending",
+			},
+			wantMember: false,
+			wantErr:    false,
+		},
+		{
+			name:              "User is not a team member",
+			installationToken: "ghs_test_token",
+			username:          "testuser",
+			organization:      "testorg",
+			team:              "testteam",
 			mockStatus:        http.StatusNotFound,
 			wantMember:        false,
 			wantErr:           false,
@@ -500,6 +520,7 @@ func TestVerifyOrganizationMembership(t *testing.T) {
 			installationToken: "ghs_test_token",
 			username:          "testuser",
 			organization:      "testorg",
+			team:              "testteam",
 			mockStatus:        http.StatusForbidden,
 			wantMember:        false,
 			wantErr:           true,
@@ -510,26 +531,40 @@ func TestVerifyOrganizationMembership(t *testing.T) {
 			installationToken: "ghs_test_token",
 			username:          "",
 			organization:      "testorg",
-			mockStatus:        http.StatusNoContent,
+			team:              "testteam",
+			mockStatus:        http.StatusOK,
 			wantMember:        false,
 			wantErr:           true,
-			errorContains:     "username and organization are required",
+			errorContains:     "username, organization, and team are required",
 		},
 		{
 			name:              "Empty organization",
 			installationToken: "ghs_test_token",
 			username:          "testuser",
 			organization:      "",
-			mockStatus:        http.StatusNoContent,
+			team:              "testteam",
+			mockStatus:        http.StatusOK,
 			wantMember:        false,
 			wantErr:           true,
-			errorContains:     "username and organization are required",
+			errorContains:     "username, organization, and team are required",
+		},
+		{
+			name:              "Empty team",
+			installationToken: "ghs_test_token",
+			username:          "testuser",
+			organization:      "testorg",
+			team:              "",
+			mockStatus:        http.StatusOK,
+			wantMember:        false,
+			wantErr:           true,
+			errorContains:     "username, organization, and team are required",
 		},
 		{
 			name:              "Server error",
 			installationToken: "ghs_test_token",
 			username:          "testuser",
 			organization:      "testorg",
+			team:              "testteam",
 			mockStatus:        http.StatusInternalServerError,
 			wantMember:        false,
 			wantErr:           true,
@@ -551,12 +586,15 @@ func TestVerifyOrganizationMembership(t *testing.T) {
 				if r.Header.Get("User-Agent") == "" {
 					t.Error("Missing User-Agent header")
 				}
-				expectedPath := fmt.Sprintf("/orgs/%s/members/%s", tt.organization, tt.username)
-				if tt.username != "" && tt.organization != "" && r.URL.Path != expectedPath {
+				expectedPath := fmt.Sprintf("/orgs/%s/teams/%s/memberships/%s", tt.organization, tt.team, tt.username)
+				if tt.username != "" && tt.organization != "" && tt.team != "" && r.URL.Path != expectedPath {
 					t.Errorf("Expected path %q but got %q", expectedPath, r.URL.Path)
 				}
 
 				w.WriteHeader(tt.mockStatus)
+				if tt.mockResponse != nil {
+					json.NewEncoder(w).Encode(tt.mockResponse)
+				}
 			}))
 			defer server.Close()
 
@@ -565,7 +603,7 @@ func TestVerifyOrganizationMembership(t *testing.T) {
 			SetGitHubAPIBaseURL(server.URL)
 			defer SetGitHubAPIBaseURL(originalURL)
 
-			isMember, err := auth.VerifyOrganizationMembership(tt.installationToken, tt.username, tt.organization)
+			isMember, err := auth.VerifyTeamMembership(tt.installationToken, tt.username, tt.organization, tt.team)
 			if tt.wantErr {
 				if err == nil {
 					t.Error("Expected error but got none")
