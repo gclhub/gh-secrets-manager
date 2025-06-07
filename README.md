@@ -8,6 +8,150 @@ A GitHub CLI extension for managing GitHub Actions secrets and variables, and De
 gh extension install gclhub/gh-secrets-manager
 ```
 
+## Development
+
+This section covers how to build and run the CLI in development mode.
+
+### Prerequisites
+
+- Go 1.24.2 or later
+- GitHub CLI (`gh`) installed and authenticated
+
+### Building the CLI
+
+1. Clone the repository:
+```bash
+git clone https://github.com/gclhub/gh-secrets-manager.git
+cd gh-secrets-manager
+```
+
+2. Build the CLI binary:
+```bash
+# Build for current platform
+go build -o bin/gh-secrets-manager ./cmd/gh-secrets-manager
+
+# Or build for specific platforms
+GOOS=linux GOARCH=amd64 go build -o bin/gh-secrets-manager-linux ./cmd/gh-secrets-manager
+GOOS=darwin GOARCH=amd64 go build -o bin/gh-secrets-manager-darwin ./cmd/gh-secrets-manager
+GOOS=windows GOARCH=amd64 go build -o bin/gh-secrets-manager.exe ./cmd/gh-secrets-manager
+```
+
+### Running in Development Mode
+
+#### Option 1: Direct Go Execution
+
+Run the CLI directly with `go run`:
+
+```bash
+# List organization secrets
+go run ./cmd/gh-secrets-manager secrets list --org myorg
+
+# Set a secret with verbose logging
+go run ./cmd/gh-secrets-manager secrets set --org myorg --name API_KEY --value "secret123" --verbose
+
+# View configuration
+go run ./cmd/gh-secrets-manager config view
+```
+
+#### Option 2: Using Built Binary
+
+Run the compiled binary:
+
+```bash
+# Using the built binary
+./bin/gh-secrets-manager secrets list --org myorg
+./bin/gh-secrets-manager config view --verbose
+```
+
+#### Option 3: Install as Local Extension
+
+Install the local development version as a GitHub CLI extension:
+
+```bash
+# Install from local directory
+gh extension install .
+
+# Or remove existing extension and install local version
+gh extension remove gclhub/gh-secrets-manager
+gh extension install .
+
+# Now use with gh prefix
+gh secrets-manager secrets list --org myorg
+```
+
+### Testing
+
+Run the test suite:
+
+```bash
+# Run all tests
+go test ./...
+
+# Run tests with verbose output
+go test ./... -v
+
+# Run tests for specific package
+go test ./pkg/api -v
+
+# Run tests with coverage
+go test ./... -cover
+```
+
+### Development Workflow
+
+1. **Make changes** to the Go source code
+2. **Test changes** using `go run` or rebuild the binary
+3. **Run tests** to ensure no regressions: `go test ./...`
+4. **Install locally** for end-to-end testing: `gh extension install .`
+5. **Test with real GitHub API** using your development environment
+
+### Dependencies
+
+Update dependencies:
+
+```bash
+# Download and verify dependencies
+go mod tidy
+
+# Update all dependencies to latest versions
+go get -u ./...
+go mod tidy
+```
+
+### Debugging
+
+Enable verbose logging for debugging:
+
+```bash
+# Using go run
+go run ./cmd/gh-secrets-manager secrets list --org myorg --verbose
+
+# Using built binary
+./bin/gh-secrets-manager secrets list --org myorg --verbose
+```
+
+### Working with Auth Server
+
+When developing with the auth server component:
+
+1. **Start the auth server** in development mode:
+```bash
+cd auth-server
+go run cmd/server/main.go --port 8080 --private-key-path /path/to/key.pem --team myteam --verbose
+```
+
+2. **Configure the CLI** to use your local auth server:
+```bash
+go run ./cmd/gh-secrets-manager config set auth-server http://localhost:8080
+go run ./cmd/gh-secrets-manager config set app-id YOUR_APP_ID
+go run ./cmd/gh-secrets-manager config set installation-id YOUR_INSTALLATION_ID
+```
+
+3. **Test the integration**:
+```bash
+go run ./cmd/gh-secrets-manager secrets list --org myorg --verbose
+```
+
 ## Features
 
 - Manage secrets and variables at the organization level
