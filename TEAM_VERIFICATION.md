@@ -11,7 +11,7 @@ The auth-server has been enhanced to verify whether users belong to a specified 
 ### Auth Server Changes
 
 1. **New Command Line Arguments**:
-   - `--organization`: GitHub organization name for team membership verification
+   - `--organization`: GitHub organization name for team membership verification (optional - auto-detected from GitHub App installation if not provided)
    - `--team`: GitHub team name for membership verification
 
 2. **Enhanced Token Endpoint**:
@@ -44,7 +44,14 @@ The auth-server has been enhanced to verify whether users belong to a specified 
 ### Starting Auth Server with Team Verification
 
 ```bash
-# Start auth server with team verification
+# Start auth server with team verification (organization is auto-detected)
+./auth-server \
+  --private-key-path /path/to/app-private-key.pem \
+  --team myteam \
+  --port 8080 \
+  --verbose
+
+# Start auth server with explicit organization override
 ./auth-server \
   --private-key-path /path/to/app-private-key.pem \
   --organization myorg \
@@ -65,7 +72,7 @@ gh secrets-manager secrets list --org myorg
 ## Security Features
 
 1. **Team Membership Verification**: Only active team members can get tokens
-2. **Organization and Team Required**: Both organization and team must be specified for verification
+2. **Team Required**: Team must be specified for verification (organization is optional and auto-detected)
 3. **Active Membership Required**: Pending team memberships are rejected
 4. **Graceful Degradation**: If no team is configured, verification is skipped
 5. **Proper Error Handling**: Clear error messages for unauthorized users
@@ -97,7 +104,7 @@ POST /token?app-id=APP_ID&installation-id=INSTALLATION_ID&username=USERNAME&org=
 1. **User Not Team Member**: Returns 403 with descriptive error message
 2. **Pending Team Membership**: Returns 403 (only active memberships accepted)
 3. **Missing Username**: Returns 400 when team verification is required
-4. **Missing Organization**: Returns 400 when team is specified without organization
+4. **Missing Team**: Returns 400 when organization is specified without team
 5. **GitHub API Errors**: Returns 500 with error details
 6. **Network Issues**: Proper error propagation and logging
 

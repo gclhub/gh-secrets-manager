@@ -84,7 +84,14 @@ cd secrets-manager/auth-server
 # Basic auth server (no access control)
 go run cmd/server/main.go --port 8080 --private-key-path /path/to/private-key.pem
 
-# With team membership verification
+# With team membership verification (organization is optional and auto-detected)
+go run cmd/server/main.go \
+  --port 8080 \
+  --private-key-path /path/to/private-key.pem \
+  --team myteam \
+  --verbose
+
+# With explicit organization override
 go run cmd/server/main.go \
   --port 8080 \
   --private-key-path /path/to/private-key.pem \
@@ -108,7 +115,14 @@ go build -o bin/auth-server cmd/server/main.go
   --port 443 \
   --private-key-path /path/to/private-key.pem
 
-# With team membership verification
+# With team membership verification (organization is optional and auto-detected)
+./bin/auth-server \
+  --port 443 \
+  --private-key-path /path/to/private-key.pem \
+  --team myteam \
+  --verbose
+
+# With explicit organization override
 ./bin/auth-server \
   --port 443 \
   --private-key-path /path/to/private-key.pem \
