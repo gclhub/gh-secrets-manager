@@ -300,6 +300,343 @@ func TestGenerateJWT_MalformedClaims(t *testing.T) {
 	// - Test JWT with null/empty claim values
 	// - Test JWT with extremely large numeric values in claims
 	// - Test JWT with special characters in string claims
+
+	t.Run("JWT with invalid exp claim type", func(t *testing.T) {
+		// Create a JWT with exp as string instead of numeric
+		claims := jwt.MapClaims{
+			"iss": "123456",
+			"iat": time.Now().Unix(),
+			"exp": "not_a_number", // Should be numeric
+		}
+		
+		token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+		tokenString, err := token.SignedString(auth.privateKey)
+		if err != nil {
+			t.Fatalf("Failed to sign test JWT: %v", err)
+		}
+
+		// Parse the token - this should fail because exp is invalid type
+		parsedToken, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			return &auth.privateKey.PublicKey, nil
+		})
+		if err == nil {
+			t.Error("Expected error for invalid exp claim type, but got none")
+		} else if !strings.Contains(err.Error(), "invalid type for claim") {
+			t.Logf("Got expected error for invalid exp type: %v", err)
+		}
+
+		// Even if parsing fails, we can still extract the raw claims
+		if parsedToken != nil {
+			parsedClaims := parsedToken.Claims.(jwt.MapClaims)
+			if exp, ok := parsedClaims["exp"].(string); !ok {
+				t.Errorf("Expected exp claim to be string type, got type: %T", parsedClaims["exp"])
+			} else if exp != "not_a_number" {
+				t.Errorf("Expected exp claim value to be 'not_a_number', got: %v", exp)
+			}
+		}
+	})
+
+	t.Run("JWT with exp claim in the past (expired token)", func(t *testing.T) {
+		// Create a JWT that's already expired
+		claims := jwt.MapClaims{
+			"iss": "123456",
+			"iat": time.Now().Add(-2 * time.Hour).Unix(),
+			"exp": time.Now().Add(-1 * time.Hour).Unix(), // Expired 1 hour ago
+		}
+		
+		token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+		tokenString, err := token.SignedString(auth.privateKey)
+		if err != nil {
+			t.Fatalf("Failed to sign test JWT: %v", err)
+		}
+
+		// Parse the token - this should succeed but token will be invalid due to expiry
+		parsedToken, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			return &auth.privateKey.PublicKey, nil
+		})
+		
+		// The parsing might fail due to expiry validation
+		if err == nil && parsedToken.Valid {
+			t.Error("Expected token to be invalid due to expiry, but it was valid")
+		}
+		
+		// Check the claims anyway
+		if err == nil {
+			parsedClaims := parsedToken.Claims.(jwt.MapClaims)
+			exp := int64(parsedClaims["exp"].(float64))
+			if exp > time.Now().Unix() {
+				t.Error("Expected token to be expired, but exp is in the future")
+			}
+		}
+	})
+
+	t.Run("JWT with negative exp/iat values", func(t *testing.T) {
+		// Create a JWT with negative timestamp values
+		claims := jwt.MapClaims{
+			"iss": "123456",
+			"iat": int64(-1000), // Negative issued at
+			"exp": int64(-500),  // Negative expiry
+		}
+		
+		token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+		tokenString, err := token.SignedString(auth.privateKey)
+		if err != nil {
+			t.Fatalf("Failed to sign test JWT: %v", err)
+		}
+
+		// Parse the token - this will likely fail due to expired validation
+		parsedToken, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			return &auth.privateKey.PublicKey, nil
+		})
+		if err == nil {
+			t.Error("Expected error for negative exp value (expired), but got none")
+		} else if !strings.Contains(err.Error(), "token is expired") {
+			t.Logf("Got expected error for negative/expired token: %v", err)
+		}
+
+		// We can still check raw claims even if token is invalid
+		if parsedToken != nil {
+			parsedClaims := parsedToken.Claims.(jwt.MapClaims)
+			if iat := int64(parsedClaims["iat"].(float64)); iat != -1000 {
+				t.Errorf("Expected iat to be -1000, got: %v", iat)
+			}
+			if exp := int64(parsedClaims["exp"].(float64)); exp != -500 {
+				t.Errorf("Expected exp to be -500, got: %v", exp)
+			}
+		}
+	})
+
+	t.Run("JWT with iat claim in the future", func(t *testing.T) {
+		// Create a JWT with issued at time in the future
+		futureTime := time.Now().Add(1 * time.Hour).Unix()
+		claims := jwt.MapClaims{
+			"iss": "123456",
+			"iat": futureTime, // Future issued at
+			"exp": time.Now().Add(2 * time.Hour).Unix(),
+		}
+		
+		token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+		tokenString, err := token.SignedString(auth.privateKey)
+		if err != nil {
+			t.Fatalf("Failed to sign test JWT: %v", err)
+		}
+
+		// Parse the token
+		parsedToken, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			return &auth.privateKey.PublicKey, nil
+		})
+		if err != nil {
+			t.Fatalf("Failed to parse JWT: %v", err)
+		}
+
+		// Verify the future iat value
+		parsedClaims := parsedToken.Claims.(jwt.MapClaims)
+		if iat := int64(parsedClaims["iat"].(float64)); iat != futureTime {
+			t.Errorf("Expected iat to be %v, got: %v", futureTime, iat)
+		}
+	})
+
+	t.Run("JWT with missing exp claim", func(t *testing.T) {
+		// Create a JWT missing the exp claim
+		claims := jwt.MapClaims{
+			"iss": "123456",
+			"iat": time.Now().Unix(),
+			// Missing "exp" claim
+		}
+		
+		token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+		tokenString, err := token.SignedString(auth.privateKey)
+		if err != nil {
+			t.Fatalf("Failed to sign test JWT: %v", err)
+		}
+
+		// Parse the token
+		parsedToken, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			return &auth.privateKey.PublicKey, nil
+		})
+		if err != nil {
+			t.Fatalf("Failed to parse JWT: %v", err)
+		}
+
+		// Verify that the exp claim is missing
+		parsedClaims := parsedToken.Claims.(jwt.MapClaims)
+		if _, exists := parsedClaims["exp"]; exists {
+			t.Error("Expected exp claim to be missing, but it was present")
+		}
+	})
+
+	t.Run("JWT with missing iat claim", func(t *testing.T) {
+		// Create a JWT missing the iat claim
+		claims := jwt.MapClaims{
+			"iss": "123456",
+			"exp": time.Now().Add(10 * time.Minute).Unix(),
+			// Missing "iat" claim
+		}
+		
+		token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+		tokenString, err := token.SignedString(auth.privateKey)
+		if err != nil {
+			t.Fatalf("Failed to sign test JWT: %v", err)
+		}
+
+		// Parse the token
+		parsedToken, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			return &auth.privateKey.PublicKey, nil
+		})
+		if err != nil {
+			t.Fatalf("Failed to parse JWT: %v", err)
+		}
+
+		// Verify that the iat claim is missing
+		parsedClaims := parsedToken.Claims.(jwt.MapClaims)
+		if _, exists := parsedClaims["iat"]; exists {
+			t.Error("Expected iat claim to be missing, but it was present")
+		}
+	})
+
+	t.Run("JWT with extra unexpected claims", func(t *testing.T) {
+		// Create a JWT with additional unexpected claims
+		claims := jwt.MapClaims{
+			"iss":           "123456",
+			"iat":           time.Now().Unix(),
+			"exp":           time.Now().Add(10 * time.Minute).Unix(),
+			"custom_field":  "unexpected_value",
+			"another_field": 42,
+			"array_field":   []string{"item1", "item2"},
+		}
+		
+		token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+		tokenString, err := token.SignedString(auth.privateKey)
+		if err != nil {
+			t.Fatalf("Failed to sign test JWT: %v", err)
+		}
+
+		// Parse the token
+		parsedToken, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			return &auth.privateKey.PublicKey, nil
+		})
+		if err != nil {
+			t.Fatalf("Failed to parse JWT: %v", err)
+		}
+
+		// Verify the extra claims exist
+		parsedClaims := parsedToken.Claims.(jwt.MapClaims)
+		if custom, exists := parsedClaims["custom_field"]; !exists || custom != "unexpected_value" {
+			t.Errorf("Expected custom_field to be 'unexpected_value', got: %v", custom)
+		}
+		if another, exists := parsedClaims["another_field"]; !exists || int(another.(float64)) != 42 {
+			t.Errorf("Expected another_field to be 42, got: %v", another)
+		}
+	})
+
+	t.Run("JWT with null/empty claim values", func(t *testing.T) {
+		// Create a JWT with null and empty values
+		claims := jwt.MapClaims{
+			"iss":          "",     // Empty string
+			"iat":          time.Now().Unix(),
+			"exp":          time.Now().Add(10 * time.Minute).Unix(),
+			"null_field":   nil,   // Null value
+			"empty_string": "",    // Empty string
+			"zero_number":  0,     // Zero value
+		}
+		
+		token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+		tokenString, err := token.SignedString(auth.privateKey)
+		if err != nil {
+			t.Fatalf("Failed to sign test JWT: %v", err)
+		}
+
+		// Parse the token
+		parsedToken, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			return &auth.privateKey.PublicKey, nil
+		})
+		if err != nil {
+			t.Fatalf("Failed to parse JWT: %v", err)
+		}
+
+		// Verify the null/empty values
+		parsedClaims := parsedToken.Claims.(jwt.MapClaims)
+		if iss := parsedClaims["iss"].(string); iss != "" {
+			t.Errorf("Expected iss to be empty string, got: %v", iss)
+		}
+		if nullField := parsedClaims["null_field"]; nullField != nil {
+			t.Errorf("Expected null_field to be nil, got: %v", nullField)
+		}
+	})
+
+	t.Run("JWT with extremely large numeric values", func(t *testing.T) {
+		// Create a JWT with very large numeric values but keep exp reasonable to avoid expiry
+		futureExp := time.Now().Add(1 * time.Hour).Unix()
+		claims := jwt.MapClaims{
+			"iss":        "123456",
+			"iat":        int64(1000000000), // Large but reasonable iat value
+			"exp":        futureExp,         // Valid future exp
+			"large_num":  float64(1e20),     // Very large float
+		}
+		
+		token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+		tokenString, err := token.SignedString(auth.privateKey)
+		if err != nil {
+			t.Fatalf("Failed to sign test JWT: %v", err)
+		}
+
+		// Parse the token
+		parsedToken, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			return &auth.privateKey.PublicKey, nil
+		})
+		if err != nil {
+			t.Fatalf("Failed to parse JWT: %v", err)
+		}
+
+		// Verify the large values
+		parsedClaims := parsedToken.Claims.(jwt.MapClaims)
+		if iat := int64(parsedClaims["iat"].(float64)); iat != 1000000000 {
+			t.Errorf("Expected iat to be 1000000000, got: %v", iat)
+		}
+		if largeNum := parsedClaims["large_num"].(float64); largeNum != 1e20 {
+			t.Errorf("Expected large_num to be 1e20, got: %v", largeNum)
+		}
+	})
+
+	t.Run("JWT with special characters in string claims", func(t *testing.T) {
+		// Create a JWT with special characters in string claims
+		claims := jwt.MapClaims{
+			"iss":              "123456",
+			"iat":              time.Now().Unix(),
+			"exp":              time.Now().Add(10 * time.Minute).Unix(),
+			"unicode_field":    "Hello 世界 🌍",
+			"special_chars":    "!@#$%^&*()_+-=[]{}|;':\",./<>?",
+			"newlines":         "line1\nline2\r\nline3",
+			"tabs_spaces":      "\t  spaced  \t",
+			"escape_sequences": "\\n\\t\\r\\\"\\\\",
+		}
+		
+		token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+		tokenString, err := token.SignedString(auth.privateKey)
+		if err != nil {
+			t.Fatalf("Failed to sign test JWT: %v", err)
+		}
+
+		// Parse the token
+		parsedToken, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			return &auth.privateKey.PublicKey, nil
+		})
+		if err != nil {
+			t.Fatalf("Failed to parse JWT: %v", err)
+		}
+
+		// Verify the special character values
+		parsedClaims := parsedToken.Claims.(jwt.MapClaims)
+		if unicode := parsedClaims["unicode_field"].(string); unicode != "Hello 世界 🌍" {
+			t.Errorf("Expected unicode_field to preserve unicode, got: %v", unicode)
+		}
+		if special := parsedClaims["special_chars"].(string); special != "!@#$%^&*()_+-=[]{}|;':\",./<>?" {
+			t.Errorf("Expected special_chars to preserve special characters, got: %v", special)
+		}
+		if newlines := parsedClaims["newlines"].(string); newlines != "line1\nline2\r\nline3" {
+			t.Errorf("Expected newlines to preserve newline characters, got: %v", newlines)
+		}
+	})
 }
 
 func TestGetInstallationToken(t *testing.T) {
