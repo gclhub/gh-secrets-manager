@@ -217,6 +217,91 @@ func TestGenerateJWT_SigningFailure(t *testing.T) {
 	}
 }
 
+func TestGenerateJWT_MalformedClaims(t *testing.T) {
+	privateKey := generateTestKey(t)
+	auth, err := NewGitHubAuth(privateKey, 123456)
+	if err != nil {
+		t.Fatalf("Failed to create GitHubAuth: %v", err)
+	}
+
+	t.Run("JWT with unexpected type in iss claim", func(t *testing.T) {
+		// Create a JWT with correct structure but wrong type for iss claim
+		claims := jwt.MapClaims{
+			"iss": 123456, // Should be string, not int
+			"iat": time.Now().Unix(),
+			"exp": time.Now().Add(10 * time.Minute).Unix(),
+		}
+		
+		token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+		tokenString, err := token.SignedString(auth.privateKey)
+		if err != nil {
+			t.Fatalf("Failed to sign test JWT: %v", err)
+		}
+
+		// Parse and verify the token - this should succeed since format is valid
+		parsedToken, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			return &auth.privateKey.PublicKey, nil
+		})
+		if err != nil {
+			t.Fatalf("Failed to parse JWT: %v", err)
+		}
+
+		// Verify that the iss claim has unexpected type
+		parsedClaims := parsedToken.Claims.(jwt.MapClaims)
+		if issuer, ok := parsedClaims["iss"].(string); ok {
+			t.Errorf("Expected iss claim to be non-string type, but got string: %v", issuer)
+		}
+		
+		// Verify it's the wrong type (float64 due to JSON unmarshaling)
+		if issuer, ok := parsedClaims["iss"].(float64); !ok {
+			t.Errorf("Expected iss claim to be float64 due to JSON unmarshaling, got type: %T", parsedClaims["iss"])
+		} else if int64(issuer) != 123456 {
+			t.Errorf("Expected iss claim value to be 123456, got: %v", issuer)
+		}
+	})
+
+	t.Run("JWT with missing required claims", func(t *testing.T) {
+		// Create a JWT missing the iss claim
+		claims := jwt.MapClaims{
+			"iat": time.Now().Unix(),
+			"exp": time.Now().Add(10 * time.Minute).Unix(),
+			// Missing "iss" claim
+		}
+		
+		token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+		tokenString, err := token.SignedString(auth.privateKey)
+		if err != nil {
+			t.Fatalf("Failed to sign test JWT: %v", err)
+		}
+
+		// Parse the token
+		parsedToken, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			return &auth.privateKey.PublicKey, nil
+		})
+		if err != nil {
+			t.Fatalf("Failed to parse JWT: %v", err)
+		}
+
+		// Verify that the iss claim is missing
+		parsedClaims := parsedToken.Claims.(jwt.MapClaims)
+		if _, exists := parsedClaims["iss"]; exists {
+			t.Error("Expected iss claim to be missing, but it was present")
+		}
+	})
+
+	// TODO: Expand malformed/negative JWT claim coverage:
+	// - Test JWT with invalid exp claim type (string instead of numeric)
+	// - Test JWT with exp claim in the past (expired token)
+	// - Test JWT with negative exp/iat values
+	// - Test JWT with iat claim in the future
+	// - Test JWT with missing exp claim
+	// - Test JWT with missing iat claim
+	// - Test JWT with extra unexpected claims
+	// - Test JWT with null/empty claim values
+	// - Test JWT with extremely large numeric values in claims
+	// - Test JWT with special characters in string claims
+}
+
 func TestGetInstallationToken(t *testing.T) {
 	privateKey := generateTestKey(t)
 	auth, err := NewGitHubAuth(privateKey, 123456)
