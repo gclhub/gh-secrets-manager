@@ -460,6 +460,295 @@ func TestGetInstallationToken_ClientError(t *testing.T) {
 	}
 }
 
+func TestVerifyTeamMembership(t *testing.T) {
+	privateKey := generateTestKey(t)
+	auth, err := NewGitHubAuth(privateKey, 123456)
+	if err != nil {
+		t.Fatalf("Failed to create GitHubAuth: %v", err)
+	}
+
+	tests := []struct {
+		name              string
+		installationToken string
+		username          string
+		organization      string
+		team              string
+		mockStatus        int
+		mockResponse      interface{}
+		wantMember        bool
+		wantErr           bool
+		errorContains     string
+	}{
+		{
+			name:              "User is an active team member",
+			installationToken: "ghs_test_token",
+			username:          "testuser",
+			organization:      "testorg",
+			team:              "testteam",
+			mockStatus:        http.StatusOK,
+			mockResponse: map[string]interface{}{
+				"state": "active",
+			},
+			wantMember: true,
+			wantErr:    false,
+		},
+		{
+			name:              "User is a pending team member",
+			installationToken: "ghs_test_token",
+			username:          "testuser",
+			organization:      "testorg",
+			team:              "testteam",
+			mockStatus:        http.StatusOK,
+			mockResponse: map[string]interface{}{
+				"state": "pending",
+			},
+			wantMember: false,
+			wantErr:    false,
+		},
+		{
+			name:              "User is not a team member",
+			installationToken: "ghs_test_token",
+			username:          "testuser",
+			organization:      "testorg",
+			team:              "testteam",
+			mockStatus:        http.StatusNotFound,
+			wantMember:        false,
+			wantErr:           false,
+		},
+		{
+			name:              "Access forbidden",
+			installationToken: "ghs_test_token",
+			username:          "testuser",
+			organization:      "testorg",
+			team:              "testteam",
+			mockStatus:        http.StatusForbidden,
+			wantMember:        false,
+			wantErr:           true,
+			errorContains:     "access forbidden",
+		},
+		{
+			name:              "Empty username",
+			installationToken: "ghs_test_token",
+			username:          "",
+			organization:      "testorg",
+			team:              "testteam",
+			mockStatus:        http.StatusOK,
+			wantMember:        false,
+			wantErr:           true,
+			errorContains:     "username, organization, and team are required",
+		},
+		{
+			name:              "Empty organization",
+			installationToken: "ghs_test_token",
+			username:          "testuser",
+			organization:      "",
+			team:              "testteam",
+			mockStatus:        http.StatusOK,
+			wantMember:        false,
+			wantErr:           true,
+			errorContains:     "username, organization, and team are required",
+		},
+		{
+			name:              "Empty team",
+			installationToken: "ghs_test_token",
+			username:          "testuser",
+			organization:      "testorg",
+			team:              "",
+			mockStatus:        http.StatusOK,
+			wantMember:        false,
+			wantErr:           true,
+			errorContains:     "username, organization, and team are required",
+		},
+		{
+			name:              "Server error",
+			installationToken: "ghs_test_token",
+			username:          "testuser",
+			organization:      "testorg",
+			team:              "testteam",
+			mockStatus:        http.StatusInternalServerError,
+			wantMember:        false,
+			wantErr:           true,
+			errorContains:     "500",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Verify request headers and path
+				if r.Header.Get("Accept") != "application/vnd.github.v3+json" {
+					t.Error("Missing or invalid Accept header")
+				}
+				expectedAuth := "Bearer " + tt.installationToken
+				if r.Header.Get("Authorization") != expectedAuth {
+					t.Errorf("Expected Authorization header %q but got %q", expectedAuth, r.Header.Get("Authorization"))
+				}
+				if r.Header.Get("User-Agent") == "" {
+					t.Error("Missing User-Agent header")
+				}
+				expectedPath := fmt.Sprintf("/orgs/%s/teams/%s/memberships/%s", tt.organization, tt.team, tt.username)
+				if tt.username != "" && tt.organization != "" && tt.team != "" && r.URL.Path != expectedPath {
+					t.Errorf("Expected path %q but got %q", expectedPath, r.URL.Path)
+				}
+
+				w.WriteHeader(tt.mockStatus)
+				if tt.mockResponse != nil {
+					json.NewEncoder(w).Encode(tt.mockResponse)
+				}
+			}))
+			defer server.Close()
+
+			// Use test server instead of real GitHub API
+			originalURL := GetGitHubAPIBaseURL()
+			SetGitHubAPIBaseURL(server.URL)
+			defer SetGitHubAPIBaseURL(originalURL)
+
+			isMember, err := auth.VerifyTeamMembership(tt.installationToken, tt.username, tt.organization, tt.team)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("Expected error but got none")
+				} else if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
+					t.Errorf("Expected error containing %q but got %v", tt.errorContains, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+			if isMember != tt.wantMember {
+				t.Errorf("Expected membership %v but got %v", tt.wantMember, isMember)
+			}
+		})
+	}
+}
+
+func TestGetInstallation(t *testing.T) {
+	privateKey := generateTestKey(t)
+	auth, err := NewGitHubAuth(privateKey, 123456)
+	if err != nil {
+		t.Fatalf("Failed to create GitHubAuth: %v", err)
+	}
+
+	tests := []struct {
+		name           string
+		installationID int64
+		mockStatus     int
+		mockResponse   interface{}
+		wantErr        bool
+		errorContains  string
+		expectedOrg    string
+	}{
+		{
+			name:           "Successful installation retrieval",
+			installationID: 987654,
+			mockStatus:     http.StatusOK,
+			mockResponse: InstallationResponse{
+				ID: 987654,
+				Account: struct {
+					Login string `json:"login"`
+					Type  string `json:"type"`
+				}{
+					Login: "myorg",
+					Type:  "Organization",
+				},
+			},
+			wantErr:     false,
+			expectedOrg: "myorg",
+		},
+		{
+			name:           "Installation not found",
+			installationID: 0,
+			mockStatus:     http.StatusNotFound,
+			mockResponse:   map[string]string{"message": "Not Found"},
+			wantErr:        true,
+			errorContains:  "404",
+		},
+		{
+			name:           "Server error",
+			installationID: 987654,
+			mockStatus:     http.StatusInternalServerError,
+			mockResponse:   map[string]string{"message": "Internal server error"},
+			wantErr:        true,
+			errorContains:  "500",
+		},
+		{
+			name:           "Invalid response format",
+			installationID: 987654,
+			mockStatus:     http.StatusOK,
+			mockResponse:   "not a json response",
+			wantErr:        true,
+			errorContains:  "decoding response",
+		},
+		{
+			name:           "Missing account login in response",
+			installationID: 987654,
+			mockStatus:     http.StatusOK,
+			mockResponse: map[string]interface{}{
+				"id": 987654,
+				"account": map[string]interface{}{
+					"type": "Organization",
+				},
+			},
+			wantErr:       true,
+			errorContains: "invalid installation response",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				// Verify request headers and path
+				if r.Header.Get("Accept") != "application/vnd.github.v3+json" {
+					t.Error("Missing or invalid Accept header")
+				}
+				if r.Header.Get("Authorization") == "" {
+					t.Error("Missing Authorization header")
+				}
+				if r.Header.Get("User-Agent") == "" {
+					t.Error("Missing User-Agent header")
+				}
+				expectedPath := fmt.Sprintf("/app/installations/%d", tt.installationID)
+				if r.URL.Path != expectedPath {
+					t.Errorf("Expected path %q but got %q", expectedPath, r.URL.Path)
+				}
+
+				w.WriteHeader(tt.mockStatus)
+				if err := json.NewEncoder(w).Encode(tt.mockResponse); err != nil {
+					t.Fatalf("Failed to encode response: %v", err)
+				}
+			}))
+			defer server.Close()
+
+			// Use test server instead of real GitHub API
+			originalURL := GetGitHubAPIBaseURL()
+			SetGitHubAPIBaseURL(server.URL)
+			defer SetGitHubAPIBaseURL(originalURL)
+
+			installation, err := auth.GetInstallation(tt.installationID)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("Expected error but got none")
+				} else if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
+					t.Errorf("Expected error containing %q but got %v", tt.errorContains, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+			if installation == nil {
+				t.Error("Expected non-nil InstallationResponse but got nil")
+				return
+			}
+			if installation.Account.Login != tt.expectedOrg {
+				t.Errorf("Expected organization %q but got %q", tt.expectedOrg, installation.Account.Login)
+			}
+		})
+	}
+}
+
 // Helper functions
 func errorStartsWith(err error, prefix string) bool {
 	return err != nil && len(err.Error()) >= len(prefix) && err.Error()[:len(prefix)] == prefix

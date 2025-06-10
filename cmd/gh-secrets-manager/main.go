@@ -68,11 +68,18 @@ Use "gh {{.CommandPath}} [command] --help" for more information about a command.
 	if err != nil || !cfg.IsGitHubAppConfigured() {
 		opts = &api.ClientOptions{AuthMethod: api.AuthMethodPAT}
 	} else {
+		// Get current username for organization verification if using GitHub App auth
+		username, err := api.GetCurrentUsername()
+		if err != nil && verbose {
+			fmt.Fprintf(os.Stderr, "Warning: Failed to get current username for organization verification: %v\n", err)
+		}
+		
 		opts = &api.ClientOptions{
 			AuthMethod:     api.AuthMethodGitHubApp,
 			AppID:          cfg.AppID,
 			InstallationID: cfg.InstallationID,
 			AuthServer:     cfg.AuthServer,
+			Username:       username,
 		}
 	}
 

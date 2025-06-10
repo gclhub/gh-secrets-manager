@@ -40,6 +40,8 @@ dist/
 /gh-secrets-manager
 auth-server/bin/
 auth-server/dist/
+auth-server/auth-server
+auth-server/server
 
 # Common backup files
 *.bak
