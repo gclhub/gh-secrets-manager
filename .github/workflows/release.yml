@@ -5,53 +5,18 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+  discussions: write
+  id-token: write
+  attestations: write
+
 jobs:
-  release:
-    name: Create Release
+  build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ${{ github.workspace }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+      - uses: cli/gh-extension-precompile@v2
         with:
-          path: gh-secrets-manager
-
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.24.2'
-
-      - name: Install dependencies
-        run: go mod download
-
-      - name: Extract version from tag
-        id: get_version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
-
-      - name: Build
-        env:
-          VERSION: ${{ env.VERSION }}
-          COMMIT_HASH: ${{ github.sha }}
-        run: |
-          mkdir -p dist
-          GOOS=linux GOARCH=amd64 go build -ldflags="-X gh-secrets-manager/pkg/version.Version=$VERSION -X gh-secrets-manager/pkg/version.CommitHash=$COMMIT_HASH" -o dist/gh-secrets-manager_linux_amd64/bin/gh-secrets-manager ./cmd/gh-secrets-manager
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-X gh-secrets-manager/pkg/version.Version=$VERSION -X gh-secrets-manager/pkg/version.CommitHash=$COMMIT_HASH" -o dist/gh-secrets-manager_darwin_amd64/bin/gh-secrets-manager ./cmd/gh-secrets-manager
-          GOOS=darwin GOARCH=arm64 go build -ldflags="-X gh-secrets-manager/pkg/version.Version=$VERSION -X gh-secrets-manager/pkg/version.CommitHash=$COMMIT_HASH" -o dist/gh-secrets-manager_darwin_arm64/bin/gh-secrets-manager ./cmd/gh-secrets-manager
-          GOOS=windows GOARCH=amd64 go build -ldflags="-X gh-secrets-manager/pkg/version.Version=$VERSION -X gh-secrets-manager/pkg/version.CommitHash=$COMMIT_HASH" -o dist/gh-secrets-manager_windows_amd64/bin/gh-secrets-manager.exe ./cmd/gh-secrets-manager
-
-      - name: Package
-        run: |
-          for dir in dist/*/; do
-            cp README.md "$dir"
-            cp LICENSE "$dir" || true
-            (cd "$dir" && zip -r "../${dir%/}.zip" .)
-          done
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: dist/*.zip
-          draft: false
-          prerelease: false
-          generate_release_notes: true
+          generate_attestations: true
+          go_version_file: go.mod
