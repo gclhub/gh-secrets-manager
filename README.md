@@ -2,187 +2,182 @@
 
 A GitHub CLI extension for managing GitHub Actions secrets and variables, and Dependabot secrets at both organization and repository levels.
 
+## Features
+
+- Manage GitHub Actions secrets at organization and repository levels
+- Handle Dependabot secrets
+- Manage GitHub Actions variables
+- Support for both public and private repositories
+- Secure secret value handling
+- Batch operations support
+
 ## Installation
 
 ```bash
 gh extension install gclhub/gh-secrets-manager
 ```
 
-## Development
+## Quick Start
 
-This section covers how to build and run the CLI in development mode.
-
-### Prerequisites
-
-- Go 1.24.2 or later
-- GitHub CLI (`gh`) installed and authenticated
-
-### Building the CLI
-
-1. Clone the repository:
+1. **Install the extension**:
 ```bash
-git clone https://github.com/gclhub/gh-secrets-manager.git
-cd gh-secrets-manager
+gh extension install gclhub/gh-secrets-manager
 ```
 
-2. Build the CLI binary:
+2. **Set up authentication** (choose one method):
+
+   **Option A: GitHub App Authentication** (Recommended for organizations)
+   1. Set up the auth server following the [Auth Server Documentation](docs/AUTH_SERVER.md)
+   2. Configure the CLI to use your auth server:
+   ```bash
+   # Point to your auth server
+   gh secrets-manager config set auth-server https://your-auth-server.example.com
+   gh secrets-manager config set app-id YOUR_APP_ID
+   gh secrets-manager config set installation-id YOUR_INSTALLATION_ID
+   ```
+
+   **Option B: Personal Access Token**
+   ```bash
+   gh auth login
+   ```
+
+3. **Start managing secrets**:
 ```bash
-# Build for current platform
-go build -o bin/gh-secrets-manager ./cmd/gh-secrets-manager
-
-# Or build for specific platforms
-GOOS=linux GOARCH=amd64 go build -o bin/gh-secrets-manager-linux ./cmd/gh-secrets-manager
-GOOS=darwin GOARCH=amd64 go build -o bin/gh-secrets-manager-darwin ./cmd/gh-secrets-manager
-GOOS=windows GOARCH=amd64 go build -o bin/gh-secrets-manager.exe ./cmd/gh-secrets-manager
-```
-
-### Running in Development Mode
-
-#### Option 1: Direct Go Execution
-
-Run the CLI directly with `go run`:
-
-```bash
-# List organization secrets
-go run ./cmd/gh-secrets-manager secrets list --org myorg
-
-# Set a secret with verbose logging
-go run ./cmd/gh-secrets-manager secrets set --org myorg --name API_KEY --value "secret123" --verbose
-
-# View configuration
-go run ./cmd/gh-secrets-manager config view
-```
-
-#### Option 2: Using Built Binary
-
-Run the compiled binary:
-
-```bash
-# Using the built binary
-./bin/gh-secrets-manager secrets list --org myorg
-./bin/gh-secrets-manager config view --verbose
-```
-
-#### Option 3: Install as Local Extension
-
-Install the local development version as a GitHub CLI extension:
-
-```bash
-# Install from local directory
-gh extension install .
-
-# Or remove existing extension and install local version
-gh extension remove gclhub/gh-secrets-manager
-gh extension install .
-
-# Now use with gh prefix
+# Organization secrets
 gh secrets-manager secrets list --org myorg
+gh secrets-manager secrets set --org myorg --name DEPLOY_KEY --value "mysecret"
+
+# Repository secrets
+gh secrets-manager secrets list --repo owner/repo
+gh secrets-manager secrets set --repo owner/repo --name API_KEY --value "mysecret"
+
+# Variables
+gh secrets-manager variables set --repo owner/repo --name ENV --value "production"
+
+# Dependabot secrets
+gh secrets-manager dependabot set --org myorg --name NPM_TOKEN --value "npmtoken"
 ```
 
-### Testing
+See the [Configuration](#configuration) section for detailed setup instructions.
 
-Run the test suite:
+## Usage
+
+### Managing Repository Secrets
 
 ```bash
-# Run all tests
-go test ./...
+# List all secrets in a repository
+gh secrets-manager secrets list --repo owner/repo
 
-# Run tests with verbose output
-go test ./... -v
+# Set a new secret
+gh secrets-manager secrets set --repo owner/repo --name API_KEY --value "mysecret"
 
-# Run tests for specific package
-go test ./pkg/api -v
-
-# Run tests with coverage
-go test ./... -cover
+# Remove a secret
+gh secrets-manager secrets remove --repo owner/repo --name API_KEY
 ```
 
-### Development Workflow
-
-1. **Make changes** to the Go source code
-2. **Test changes** using `go run` or rebuild the binary
-3. **Run tests** to ensure no regressions: `go test ./...`
-4. **Install locally** for end-to-end testing: `gh extension install .`
-5. **Test with real GitHub API** using your development environment
-
-### Dependencies
-
-Update dependencies:
+### Managing Organization Secrets
 
 ```bash
-# Download and verify dependencies
-go mod tidy
+# List all organization secrets
+gh secrets-manager secrets list --org myorg
 
-# Update all dependencies to latest versions
-go get -u ./...
-go mod tidy
+# Set an organization secret
+gh secrets-manager secrets set --org myorg --name DEPLOY_KEY --value "orgkey"
+
+# Remove an organization secret
+gh secrets-manager secrets remove --org myorg --name DEPLOY_KEY
 ```
 
-### Debugging
-
-Enable verbose logging for debugging:
+### Managing Variables
 
 ```bash
-# Using go run
-go run ./cmd/gh-secrets-manager secrets list --org myorg --verbose
+# List all variables
+gh secrets-manager variables list --repo owner/repo
 
-# Using built binary
-./bin/gh-secrets-manager secrets list --org myorg --verbose
+# Set a new variable
+gh secrets-manager variables set --repo owner/repo --name ENV --value "production"
 ```
 
-### Working with Auth Server
+### Managing Dependabot Secrets
 
-When developing with the auth server component:
-
-1. **Start the auth server** in development mode:
 ```bash
-cd auth-server
-go run cmd/server/main.go --port 8080 --private-key-path /path/to/key.pem --team myteam --verbose
+# List Dependabot secrets
+gh secrets-manager dependabot list --repo owner/repo
+
+# Set a Dependabot secret
+gh secrets-manager dependabot set --repo owner/repo --name NPM_TOKEN --value "token123"
 ```
 
-2. **Configure the CLI** to use your local auth server:
+## Configuration
+
+This extension supports two authentication methods: GitHub App (recommended) and Personal Access Token (PAT).
+
+### GitHub App Authentication Setup
+
+1. Set up a GitHub App in your organization (see [Auth Server Documentation](docs/AUTH_SERVER.md))
+2. Configure the CLI:
 ```bash
-go run ./cmd/gh-secrets-manager config set auth-server http://localhost:8080
-go run ./cmd/gh-secrets-manager config set app-id YOUR_APP_ID
-go run ./cmd/gh-secrets-manager config set installation-id YOUR_INSTALLATION_ID
+# Set the authentication server URL
+gh secrets-manager config set auth-server https://your-auth-server.example.com
+
+# Set your GitHub App credentials
+gh secrets-manager config set app-id YOUR_APP_ID
+gh secrets-manager config set installation-id YOUR_INSTALLATION_ID
 ```
 
-3. **Test the integration**:
+### Personal Access Token Setup
+
+The CLI automatically uses your GitHub CLI authentication. Just ensure you're logged in:
 ```bash
-go run ./cmd/gh-secrets-manager secrets list --org myorg --verbose
+gh auth login
 ```
 
-## Features
+### Managing Configuration
 
-- Manage secrets and variables at the organization level
-- Manage secrets and variables for individual repositories
-- Manage secrets and variables for repositories matching specific properties
-- Import secrets and variables from JSON or CSV files
-- List current values for variables and redacted secrets
-- Update secret and variable values
-- Delete secrets and variables
-- Support for both GitHub Actions and Dependabot secrets
-- Configure GitHub App authentication settings
+```bash
+# View all current settings
+gh secrets-manager config view
 
-## GitHub App Authentication
+# View specific setting
+gh secrets-manager config get auth-server
+```
+
+For detailed information about setting up and running the authentication server, see [Auth Server Documentation](docs/AUTH_SERVER.md).
+
+## Troubleshooting
+
+- Ensure you have the latest version of the GitHub CLI installed
+- Check that you have the necessary permissions in the organization/repository
+- For detailed logs, add the `--verbose` flag to any command
+
+## Support
+
+- [Report Issues](https://github.com/gclhub/gh-secrets-manager/issues)
+- [Contributing Guide](docs/CONTRIBUTING.md)
+- [Security Policy](docs/SECURITY.md)
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+## Authentication
 
 This tool supports two authentication methods:
-1. GitHub App-based authentication for enhanced security and temporary access (preferred when configured)
-2. Personal Access Token (PAT) through GitHub CLI (fallback)
 
-When you have configured all required GitHub App settings (auth-server, app-id, and installation-id), the tool will automatically use GitHub App authentication. It only falls back to PAT authentication if:
+1. **GitHub App Authentication (Recommended)**:
+   - Enhanced security with temporary access tokens
+   - Configurable through the `config` command
+   - Requires a running auth server
+   - See [Auth Server Documentation](docs/AUTH_SERVER.md) for setup instructions
+
+2. **Personal Access Token (Fallback)**:
+   - Uses your GitHub CLI authentication
+   - No additional configuration needed
+   - Less secure than GitHub App authentication
+
+The tool automatically uses GitHub App authentication when configured, falling back to PAT only if:
 - GitHub App configuration is missing or incomplete
 - There's an error loading the configuration
-
-### Setting up the GitHub App
-
-1. Create a new GitHub App in your organization:
-   - Go to Organization Settings > Developer Settings > GitHub Apps
-   - Create a new app with the following permissions:
-     - Repository permissions:
-       - Actions: Read & Write
-       - Secrets: Read & Write
-       - Variables: Read & Write
      - Organization permissions:
        - Secrets: Read & Write
        - Variables: Read & Write
@@ -213,112 +208,7 @@ gh secrets-manager config view
 
 Once configured, the extension will automatically use GitHub App authentication for all commands without requiring additional flags.
 
-### Running the Auth Server
 
-#### Development Mode
-
-1. Clone the auth-server component:
-```bash
-git clone <repo>/secrets-manager
-cd secrets-manager/auth-server
-```
-
-2. Start the server with your GitHub App credentials:
-```bash
-# Basic auth server (no access control)
-go run cmd/server/main.go --port 8080 --private-key-path /path/to/private-key.pem
-
-# With team membership verification (organization is optional and auto-detected)
-go run cmd/server/main.go \
-  --port 8080 \
-  --private-key-path /path/to/private-key.pem \
-  --team myteam \
-  --verbose
-
-# With explicit organization override
-go run cmd/server/main.go \
-  --port 8080 \
-  --private-key-path /path/to/private-key.pem \
-  --organization myorg \
-  --team myteam \
-  --verbose
-```
-
-#### Production Mode
-
-1. Build the auth server:
-```bash
-cd auth-server
-go build -o bin/auth-server cmd/server/main.go
-```
-
-2. Deploy the server with your configuration:
-```bash
-# Basic auth server (no access control)
-./bin/auth-server \
-  --port 443 \
-  --private-key-path /path/to/private-key.pem
-
-# With team membership verification (organization is optional and auto-detected)
-./bin/auth-server \
-  --port 443 \
-  --private-key-path /path/to/private-key.pem \
-  --team myteam \
-  --verbose
-
-# With explicit organization override
-./bin/auth-server \
-  --port 443 \
-  --private-key-path /path/to/private-key.pem \
-  --organization myorg \
-  --team myteam \
-  --verbose
-```
-
-We recommend:
-- Running behind a reverse proxy with TLS
-- Using environment variables or a config management system for the private key
-- Implementing additional access controls and rate limiting
-- Monitoring server health and token usage
-- Configuring team membership verification for access control
-
-### Auth Server Endpoints
-
-The auth server exposes two HTTP endpoints:
-
-#### Health Check
-```
-GET /healthz
-```
-Returns 200 OK if the server is running. Useful for load balancer health checks and monitoring.
-
-#### Token Generation
-```
-POST /token?app-id=APP_ID&installation-id=INSTALLATION_ID&username=USERNAME&org=ORG&team=TEAM
-```
-Generates a GitHub installation access token. If team verification is configured, the user must be an active member of the specified team.
-
-Parameters:
-- `app-id` (required) - The GitHub App ID
-- `installation-id` (required) - The installation ID for the organization
-- `username` (optional) - GitHub username for team membership verification
-- `org` (optional) - Organization name (overrides server configuration)
-- `team` (optional) - Team name (overrides server configuration)
-
-Response (200 OK):
-```json
-{
-    "token": "ghs_xxxxxxxxxxxx",
-    "expires_at": "2025-05-16T19:47:43Z"
-}
-```
-
-Error Response (400, 401, 500):
-```json
-{
-    "message": "error description"
-}
-```
 
 ### Using GitHub App Authentication
 
