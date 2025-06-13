@@ -110,29 +110,32 @@ gh secrets-manager dependabot set --repo owner/repo --name NPM_TOKEN --value "to
 
 ## Configuration
 
-This extension supports two authentication methods: GitHub App (recommended) and Personal Access Token (PAT).
+### Managing Configuration Settings
 
-### GitHub App Authentication Setup
+The `config` command allows you to view and modify settings:
 
-1. Set up a GitHub App in your organization (see [Auth Server Documentation](docs/AUTH_SERVER.md))
-2. Configure the CLI:
 ```bash
-# Set the authentication server URL
+# View all current settings
+gh secrets-manager config view
+
+# View specific setting
+gh secrets-manager config get auth-server
+
+# Set a configuration value
 gh secrets-manager config set auth-server https://your-auth-server.example.com
 
-# Set your GitHub App credentials
-gh secrets-manager config set app-id YOUR_APP_ID
-gh secrets-manager config set installation-id YOUR_INSTALLATION_ID
+# Delete a configuration value
+gh secrets-manager config delete auth-server
 ```
 
-### Personal Access Token Setup
+### Configuration Storage
 
-The CLI automatically uses your GitHub CLI authentication. Just ensure you're logged in:
-```bash
-gh auth login
-```
+Configuration is stored in:
+- macOS: `~/Library/Application Support/gh/secrets-manager/config.json`
+- Linux: `~/.config/gh/secrets-manager/config.json`
+- Windows: `%APPDATA%\gh\secrets-manager\config.json`
 
-### Managing Configuration
+File permissions are set to 0644 to ensure secure access.
 
 ```bash
 # View all current settings
@@ -162,15 +165,15 @@ MIT License - see [LICENSE](LICENSE) for details.
 
 ## Authentication
 
-This tool supports two authentication methods:
+This extension supports two authentication methods:
 
-1. **GitHub App Authentication (Recommended)**:
+1. **GitHub App Authentication** (Recommended):
    - Enhanced security with temporary access tokens
-   - Configurable through the `config` command
-   - Requires a running auth server
-   - See [Auth Server Documentation](docs/AUTH_SERVER.md) for setup instructions
+   - Team-based access controls
+   - Automatic token rotation
+   - See [Auth Server Documentation](docs/AUTH_SERVER.md) for setup
 
-2. **Personal Access Token (Fallback)**:
+2. **Personal Access Token** (Fallback):
    - Uses your GitHub CLI authentication
    - No additional configuration needed
    - Less secure than GitHub App authentication
@@ -178,60 +181,8 @@ This tool supports two authentication methods:
 The tool automatically uses GitHub App authentication when configured, falling back to PAT only if:
 - GitHub App configuration is missing or incomplete
 - There's an error loading the configuration
-     - Organization permissions:
-       - Secrets: Read & Write
-       - Variables: Read & Write
-   - Generate and download a private key
-   - Note your App ID
 
-2. Install the app in your organization:
-   - After creating the app, install it in your organization
-   - Note the Installation ID from the installation URL or via the API
-
-### Initial Configuration
-
-After setting up your GitHub App and auth server, configure the CLI extension to use them:
-
-```bash
-# Set the authentication server URL
-gh secrets-manager config set auth-server https://your-auth-server.example.com
-
-# Set your GitHub App ID
-gh secrets-manager config set app-id YOUR_APP_ID
-
-# Set your Installation ID
-gh secrets-manager config set installation-id YOUR_INSTALLATION_ID
-
-# Verify your configuration
-gh secrets-manager config view
-```
-
-Once configured, the extension will automatically use GitHub App authentication for all commands without requiring additional flags.
-
-
-
-### Using GitHub App Authentication
-
-To use the CLI with GitHub App authentication:
-
-```bash
-# List secrets using GitHub App authentication
-gh secrets-manager secrets list \
-  --org myorg \
-  --app-id 123456 \
-  --installation-id 987654 \
-  --auth-server https://auth.example.com
-
-# Import secrets with GitHub App authentication
-gh secrets-manager secrets set \
-  --org myorg \
-  --file secrets.json \
-  --app-id 123456 \
-  --installation-id 987654 \
-  --auth-server https://auth.example.com
-```
-
-The auth server will:
+When using GitHub App authentication, the auth server will:
 1. Generate a JWT using the GitHub App's private key
 2. Exchange it for an installation access token
 3. Return the token to the CLI
