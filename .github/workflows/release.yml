@@ -12,11 +12,64 @@ permissions:
   attestations: write
 
 jobs:
-  build:
+  cli-extension:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: cli/gh-extension-precompile@v2
         with:
+          build_script_override: "go build -o bin/gh-secrets-manager ./cmd/gh-secrets-manager"
           generate_attestations: true
           go_version_file: go.mod
+
+  auth-server:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [linux, darwin, windows]
+        arch: [amd64, arm64]
+        exclude:
+          - os: windows
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v4
+        with:
+          go-version-file: 'auth-server/go.mod'
+
+      - name: Build auth server
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          cd auth-server
+          output="gh-secrets-auth-server"
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            output="${output}.exe"
+          fi
+          go build -o "../dist/${output}-${{ matrix.os }}-${{ matrix.arch }}" ./cmd/server
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: auth-server-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/gh-secrets-auth-server-*
+
+  create-release:
+    needs: [cli-extension, auth-server]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Create Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag_name="${GITHUB_REF#refs/tags/}"
+          gh release create "$tag_name" \
+            --title "Release $tag_name" \
+            --generate-notes \
+            artifacts/*/*
