@@ -50,7 +50,7 @@ jobs:
           go build -o "../dist/${output}-${{ matrix.os }}-${{ matrix.arch }}" ./cmd/server
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: auth-server-${{ matrix.os }}-${{ matrix.arch }}
           path: dist/gh-secrets-auth-server-*
@@ -60,7 +60,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           path: artifacts
 
