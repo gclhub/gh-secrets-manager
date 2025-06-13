@@ -11,12 +11,6 @@ A GitHub CLI extension for managing GitHub Actions secrets and variables, and De
 - Secure secret value handling
 - Batch operations support
 
-## Installation
-
-```bash
-gh extension install gclhub/gh-secrets-manager
-```
-
 ## Quick Start
 
 1. **Install the extension**:
@@ -24,89 +18,42 @@ gh extension install gclhub/gh-secrets-manager
 gh extension install gclhub/gh-secrets-manager
 ```
 
-2. **Set up authentication** (choose one method):
+2. **Choose an authentication method**:
+   - [GitHub App Authentication](docs/AUTH_SERVER.md) (Recommended for organizations)
+   - Personal Access Token: Just run `gh auth login`
 
-   **Option A: GitHub App Authentication** (Recommended for organizations)
-   1. Set up the auth server following the [Auth Server Documentation](docs/AUTH_SERVER.md)
-   2. Configure the CLI to use your auth server:
-   ```bash
-   # Point to your auth server
-   gh secrets-manager config set auth-server https://your-auth-server.example.com
-   gh secrets-manager config set app-id YOUR_APP_ID
-   gh secrets-manager config set installation-id YOUR_INSTALLATION_ID
-   ```
-
-   **Option B: Personal Access Token**
-   ```bash
-   gh auth login
-   ```
-
-3. **Start managing secrets**:
+3. **Try some commands**:
 ```bash
-# Organization secrets
-gh secrets-manager secrets list --org myorg
-gh secrets-manager secrets set --org myorg --name DEPLOY_KEY --value "mysecret"
-
-# Repository secrets
-gh secrets-manager secrets list --repo owner/repo
-gh secrets-manager secrets set --repo owner/repo --name API_KEY --value "mysecret"
-
-# Variables
-gh secrets-manager variables set --repo owner/repo --name ENV --value "production"
-
-# Dependabot secrets
-gh secrets-manager dependabot set --org myorg --name NPM_TOKEN --value "npmtoken"
-```
-
-See the [Configuration](#configuration) section for detailed setup instructions.
-
-## Usage
-
-### Managing Repository Secrets
-
-```bash
-# List all secrets in a repository
-gh secrets-manager secrets list --repo owner/repo
-
-# Set a new secret
-gh secrets-manager secrets set --repo owner/repo --name API_KEY --value "mysecret"
-
-# Remove a secret
-gh secrets-manager secrets remove --repo owner/repo --name API_KEY
-```
-
-### Managing Organization Secrets
-
-```bash
-# List all organization secrets
+# List organization secrets
 gh secrets-manager secrets list --org myorg
 
-# Set an organization secret
-gh secrets-manager secrets set --org myorg --name DEPLOY_KEY --value "orgkey"
+# Set a repository secret
+gh secrets-manager secrets set --repo owner/repo --name API_KEY --value "mysecret"
 
-# Remove an organization secret
-gh secrets-manager secrets remove --org myorg --name DEPLOY_KEY
-```
-
-### Managing Variables
-
-```bash
-# List all variables
-gh secrets-manager variables list --repo owner/repo
-
-# Set a new variable
+# Set an environment variable
 gh secrets-manager variables set --repo owner/repo --name ENV --value "production"
 ```
 
-### Managing Dependabot Secrets
+See [Authentication](#authentication) and [Configuration](#configuration) for detailed setup.
 
-```bash
-# List Dependabot secrets
-gh secrets-manager dependabot list --repo owner/repo
+## Authentication
 
-# Set a Dependabot secret
-gh secrets-manager dependabot set --repo owner/repo --name NPM_TOKEN --value "token123"
-```
+This extension supports two authentication methods:
+
+1. **GitHub App Authentication** (Recommended):
+   - Enhanced security with temporary access tokens
+   - Team-based access controls
+   - Automatic token rotation
+   - See [Auth Server Documentation](docs/AUTH_SERVER.md) for setup
+
+2. **Personal Access Token** (Fallback):
+   - Uses your GitHub CLI authentication
+   - No additional configuration needed
+   - Less secure than GitHub App authentication
+
+The tool automatically uses GitHub App authentication when configured, falling back to PAT only if:
+- GitHub App configuration is missing or incomplete
+- There's an error loading the configuration
 
 ## Configuration
 
@@ -137,14 +84,6 @@ Configuration is stored in:
 
 File permissions are set to 0644 to ensure secure access.
 
-```bash
-# View all current settings
-gh secrets-manager config view
-
-# View specific setting
-gh secrets-manager config get auth-server
-```
-
 For detailed information about setting up and running the authentication server, see [Auth Server Documentation](docs/AUTH_SERVER.md).
 
 ## Troubleshooting
@@ -163,81 +102,7 @@ For detailed information about setting up and running the authentication server,
 
 MIT License - see [LICENSE](LICENSE) for details.
 
-## Authentication
-
-This extension supports two authentication methods:
-
-1. **GitHub App Authentication** (Recommended):
-   - Enhanced security with temporary access tokens
-   - Team-based access controls
-   - Automatic token rotation
-   - See [Auth Server Documentation](docs/AUTH_SERVER.md) for setup
-
-2. **Personal Access Token** (Fallback):
-   - Uses your GitHub CLI authentication
-   - No additional configuration needed
-   - Less secure than GitHub App authentication
-
-The tool automatically uses GitHub App authentication when configured, falling back to PAT only if:
-- GitHub App configuration is missing or incomplete
-- There's an error loading the configuration
-
-When using GitHub App authentication, the auth server will:
-1. Generate a JWT using the GitHub App's private key
-2. Exchange it for an installation access token
-3. Return the token to the CLI
-4. The CLI will use this token for all API calls
-5. Tokens are automatically refreshed before expiration
-
-## Usage
-
-### Managing Configuration
-
-The `config` subcommand allows you to manage persistent GitHub App authentication settings. Configuration is stored in the user's config directory under `gh/secrets-manager/config.json`.
-
-### Available Commands
-
-- `config view` - Display current configuration settings
-- `config set <key> <value>` - Set a configuration value
-- `config get <key>` - Get a specific configuration value
-- `config delete <key>` - Delete a configuration value
-
-### Configuration Keys
-
-The following configuration keys are supported:
-
-- `auth-server` - URL of the authentication server (e.g., https://auth.example.com)
-- `app-id` - GitHub App ID (numeric)
-- `installation-id` - GitHub App Installation ID (numeric)
-
-### Examples
-
-```bash
-# View all current configuration
-gh secrets-manager config view
-
-# Get a specific configuration value
-gh secrets-manager config get auth-server
-
-# Set configuration values
-gh secrets-manager config set auth-server https://auth.example.com
-gh secrets-manager config set app-id 123456
-gh secrets-manager config set installation-id 987654
-
-# Delete a configuration value
-gh secrets-manager config delete auth-server
-```
-
-### Configuration Storage
-
-Configuration is automatically stored in:
-- macOS: `~/Library/Application Support/gh/secrets-manager/config.json`
-- Linux: `~/.config/gh/secrets-manager/config.json`
-- Windows: `%APPDATA%\gh\secrets-manager\config.json`
-
-The configuration file uses JSON format and is created automatically when you first set a value. File permissions are set to 0644 to ensure secure access.
-
-When all required GitHub App settings (auth-server, app-id, and installation-id) are configured, the extension will automatically use GitHub App authentication for all commands without requiring additional command-line flags.
+## Advanced Usage
 
 ### Managing Secrets
 
