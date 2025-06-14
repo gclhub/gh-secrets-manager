@@ -17,10 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: cli/gh-extension-precompile@v2
-        env:
-          CGO_ENABLED: 0
         with:
-          build_script_override: "mkdir -p bin && go build -o ./bin/gh-secrets-manager ./cmd/gh-secrets-manager"
           generate_attestations: true
           go_version_file: go.mod
 
